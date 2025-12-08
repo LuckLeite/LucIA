@@ -47,7 +47,7 @@ const App: React.FC = () => {
   const {
     transactions, categories, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
-    plannedTransactions, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
+    plannedTransactions, generatedCardInvoices, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
     loading, error,
     exportData, importData, clearAllData
@@ -134,43 +134,14 @@ const App: React.FC = () => {
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
 
   const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix)), [plannedTransactions, monthPrefix]);
-
-   const cardInvoiceTransactions = useMemo<PlannedTransaction[]>(() => {
-    const invoicesByCard = new Map<string, number>();
-    const currentYear = displayDate.getFullYear();
-    const currentMonth = displayDate.getMonth();
-
-    cardTransactions.forEach(cardTx => {
-      const monthlyPayment = cardTx.totalAmount / cardTx.installments;
-      const purchaseDate = parseDateAsUTC(cardTx.purchaseDate);
-
-      for (let i = 1; i <= cardTx.installments; i++) {
-        const dueDate = new Date(purchaseDate);
-        dueDate.setUTCMonth(purchaseDate.getUTCMonth() + i);
-        if (dueDate.getUTCFullYear() === currentYear && dueDate.getUTCMonth() === currentMonth) {
-          invoicesByCard.set(cardTx.card, (invoicesByCard.get(cardTx.card) || 0) + monthlyPayment);
-        }
-      }
-    });
-
-    const invoiceDueDate = new Date(Date.UTC(currentYear, currentMonth, 10)).toISOString().split('T')[0];
-
-    return Array.from(invoicesByCard.entries()).map(([cardName, totalAmount]) => ({
-      id: `card_invoice_${cardName}_${currentYear}_${currentMonth}`,
-      amount: totalAmount,
-      type: 'expense',
-      categoryId: 'cat_expense_card',
-      description: `Fatura Cartão ${cardName}`,
-      dueDate: invoiceDueDate,
-      status: 'pending',
-      isGenerated: true,
-    }));
-  }, [cardTransactions, displayDate]);
+  
+  // Filter generated invoices for this month
+  const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
 
   const combinedPlannedTransactions = useMemo(() => 
-    [...filteredPlannedTransactions, ...cardInvoiceTransactions]
+    [...filteredPlannedTransactions, ...filteredCardInvoices]
     .sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
-  [filteredPlannedTransactions, cardInvoiceTransactions]);
+  [filteredPlannedTransactions, filteredCardInvoices]);
 
   const balanceChartData = useMemo(() => {
     const firstDayOfMonth = new Date(Date.UTC(displayDate.getFullYear(), displayDate.getMonth(), 1));
@@ -353,6 +324,7 @@ const App: React.FC = () => {
         isOpen={isImportModalOpen}
         onClose={() => setImportModalOpen(false)}
         onSubmit={handleImportSubmit}
+        categories={categories}
       />
 
       <AllTransactionsModal

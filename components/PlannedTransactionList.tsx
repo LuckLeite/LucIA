@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { PlannedTransaction, Category } from '../types';
 
@@ -45,7 +44,7 @@ const PlannedTransactionListItem: React.FC<{
         <span className={`font-bold ${isIncome ? 'text-income' : 'text-expense'}`}>
           {transaction.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </span>
-        {!isPaid && !isGenerated && (
+        {!isPaid && (
             <button onClick={onMarkAsPaid} className="px-3 py-1 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600">
                 Dar Baixa
             </button>

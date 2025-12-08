@@ -13,11 +13,19 @@ const generateUUID = () => {
     });
 };
 
+// Helper for UTC dates
+const parseDateAsUTC = (dateString: string) => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+};
+
 const STORAGE_KEYS = {
     TRANSACTIONS: 'lucia_transactions',
     PLANNED: 'lucia_planned_transactions',
     CARDS: 'lucia_card_transactions'
 };
+
+const MOVEMENT_BALANCE_DESC = 'Saldo Acumulado Movimento';
 
 export const useFinanceData = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -63,17 +71,152 @@ export const useFinanceData = () => {
         localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(sorted));
     };
 
-    // --- Transactions ---
+    // --- Dynamic Card Invoices Generation ---
+    // Generates invoices for all time, but marks them as paid if a matching transaction exists
+    const generatedCardInvoices = useMemo(() => {
+        const invoices: PlannedTransaction[] = [];
+        const invoicesByCardAndMonth = new Map<string, number>();
+        
+        // 1. Calculate totals per month/card
+        cardTransactions.forEach(cardTx => {
+            const monthlyPayment = cardTx.totalAmount / cardTx.installments;
+            const purchaseDate = parseDateAsUTC(cardTx.purchaseDate);
+
+            for (let i = 1; i <= cardTx.installments; i++) {
+                const dueDate = new Date(purchaseDate);
+                dueDate.setUTCMonth(purchaseDate.getUTCMonth() + i);
+                // Set fixed due day (e.g., 10th)
+                dueDate.setUTCDate(10);
+                
+                const key = `${cardTx.card}_${dueDate.getUTCFullYear()}_${dueDate.getUTCMonth()}`;
+                const current = invoicesByCardAndMonth.get(key) || 0;
+                invoicesByCardAndMonth.set(key, current + monthlyPayment);
+            }
+        });
+
+        // 2. Convert to PlannedTransaction objects
+        invoicesByCardAndMonth.forEach((amount, key) => {
+            const [cardName, yearStr, monthStr] = key.split('_');
+            const year = parseInt(yearStr);
+            const month = parseInt(monthStr);
+            
+            // Reconstruct date string YYYY-MM-DD
+            const dueDateObj = new Date(Date.UTC(year, month, 10));
+            const dueDateString = dueDateObj.toISOString().split('T')[0];
+            const description = `Fatura Cartão ${cardName}`;
+
+            // 3. Check if it's already paid
+            // We look for a real transaction in the same month, same category (card), same description (approx)
+            const isPaid = transactions.some(tx => {
+                const txDate = parseDateAsUTC(tx.date);
+                return tx.categoryId === 'cat_expense_card' &&
+                       tx.description.includes(cardName) &&
+                       txDate.getUTCFullYear() === year &&
+                       txDate.getUTCMonth() === month;
+            });
+
+            invoices.push({
+                id: `card_invoice_${key}`,
+                amount: amount,
+                type: 'expense',
+                categoryId: 'cat_expense_card',
+                description: description,
+                dueDate: dueDateString,
+                status: isPaid ? 'paid' : 'pending',
+                isGenerated: true,
+            });
+        });
+
+        return invoices;
+    }, [cardTransactions, transactions]);
+
+    // --- Transactions & Automatic Movement Logic ---
+
+    // Logic to handle "Movement" category automation
+    // If adding Expense Movement -> Increase Planned Income (Movement Balance)
+    // If adding Income Movement -> Decrease Planned Income (Movement Balance)
+    const updateMovementBalance = (
+        currentPlanned: PlannedTransaction[],
+        amountDelta: number, // Positive adds to balance, Negative removes
+        dateReference: string
+    ) => {
+        let updated = [...currentPlanned];
+        // Find existing 'Saldo Acumulado Movimento' that is pending
+        let balanceItem = updated.find(p =>
+            p.categoryId === 'cat_income_movement' &&
+            p.status === 'pending' &&
+            p.description === MOVEMENT_BALANCE_DESC
+        );
+
+        if (balanceItem) {
+            const newAmount = balanceItem.amount + amountDelta;
+            if (newAmount <= 0.01) {
+                 // Balance depleted, remove the planned item
+                 updated = updated.filter(p => p.id !== balanceItem!.id);
+            } else {
+                 // Update balance
+                 updated = updated.map(p => p.id === balanceItem!.id ? { ...p, amount: newAmount } : p);
+            }
+        } else if (amountDelta > 0) {
+            // Create new balance item if we are adding funds and none exists
+            updated.push({
+                id: generateUUID(),
+                categoryId: 'cat_income_movement',
+                type: 'income',
+                amount: amountDelta,
+                description: MOVEMENT_BALANCE_DESC,
+                dueDate: dateReference,
+                status: 'pending',
+                isGenerated: true
+            });
+        }
+        // If amountDelta < 0 and no item exists, we do nothing (cannot subtract from empty)
+        return updated;
+    };
 
     const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id'>) => {
         const newTx: Transaction = { ...transaction, id: generateUUID() };
-        saveTransactions([newTx, ...transactions]);
-    }, [transactions]);
+        const newTransactionsList = [newTx, ...transactions]; 
+
+        // Movement Logic
+        let updatedPlanned = plannedTransactions;
+        if (newTx.categoryId === 'cat_expense_movement') {
+             // Expense means money went into savings -> Add to Planned Income Balance
+             updatedPlanned = updateMovementBalance(updatedPlanned, newTx.amount, newTx.date);
+        } else if (newTx.categoryId === 'cat_income_movement') {
+             // Income means money came back from savings -> Deduct from Planned Income Balance
+             updatedPlanned = updateMovementBalance(updatedPlanned, -newTx.amount, newTx.date);
+        }
+
+        saveTransactions(newTransactionsList);
+        if (updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
+    }, [transactions, plannedTransactions]);
 
     const addMultipleTransactions = useCallback(async (newTransactions: Omit<Transaction, 'id'>[]) => {
         const formatted = newTransactions.map(t => ({ ...t, id: generateUUID() }));
+        
+        // Calculate Net Movement Change first to apply in one go (cleaner)
+        let movementNetChange = 0;
+        let refDate = new Date().toISOString().split('T')[0];
+
+        formatted.forEach(tx => {
+            if (tx.categoryId === 'cat_expense_movement') {
+                movementNetChange += tx.amount;
+                refDate = tx.date;
+            } else if (tx.categoryId === 'cat_income_movement') {
+                movementNetChange -= tx.amount;
+                refDate = tx.date;
+            }
+        });
+
+        let updatedPlanned = plannedTransactions;
+        if (movementNetChange !== 0) {
+            updatedPlanned = updateMovementBalance(updatedPlanned, movementNetChange, refDate);
+        }
+
         saveTransactions([...transactions, ...formatted]);
-    }, [transactions]);
+        if (updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
+    }, [transactions, plannedTransactions]);
 
     const updateTransaction = useCallback(async (updatedTransaction: Transaction) => {
         const updatedList = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
@@ -140,12 +283,34 @@ export const useFinanceData = () => {
             description: planned.description,
             type: planned.type,
         };
-        const updatedPlannedTx: PlannedTransaction = { ...planned, status: 'paid' };
-    
-        // Update both lists
+        
+        // 1. Add the real transaction
+        // NOTE: We do NOT call addTransaction() here to avoid double-triggering logic (circular ref), 
+        // but we DO need to handle movement logic if the planned transaction was a movement one.
+        
+        let updatedPlanned = plannedTransactions;
+        
+        // If we are paying a "Planned Movement Income", we are effectively moving money back.
+        // The planned item itself (the balance) needs to be reduced/removed.
+        if (planned.categoryId === 'cat_income_movement') {
+             // Logic: If I pay a "Movement Income" of 1000, I receive 1000 real money.
+             // The balance (which is this planned item) should be reduced by 1000.
+             // Since 'mark as paid' usually just updates status, for the movement balance we might want to keep it if it's a partial pay?
+             // But 'markAsPaid' implies full conversion.
+             
+             // However, for the 'Saldo Acumulado Movimento', the user usually won't click 'Dar Baixa' on the whole pot unless withdrawing everything.
+             // If they click 'Dar Baixa', we assume they withdrew the whole amount shown.
+             updatedPlanned = updatedPlanned.filter(p => p.id !== planned.id);
+        } else {
+            // Normal behavior for other planned items
+             if (!planned.isGenerated) {
+                const updatedPlannedTx: PlannedTransaction = { ...planned, status: 'paid' };
+                updatedPlanned = updatedPlanned.map(t => t.id === planned.id ? updatedPlannedTx : t);
+            }
+        }
+
         saveTransactions([newTransaction, ...transactions]);
-        const updatedPlannedList = plannedTransactions.map(t => t.id === planned.id ? updatedPlannedTx : t);
-        savePlanned(updatedPlannedList);
+        savePlanned(updatedPlanned);
 
     }, [plannedTransactions, transactions]);
 
@@ -175,17 +340,27 @@ export const useFinanceData = () => {
         let income = 0;
         let expense = 0;
 
+        // 1. Real Transactions
         transactions.filter(tx => tx.date.startsWith(monthPrefix)).forEach(tx => {
             if (tx.type === 'income') income += tx.amount; else expense += tx.amount;
         });
 
+        // 2. Manual Planned Transactions
+        // Exclude Movement Balance from "Monthly Planned Income" sum if you don't want it to skew the monthly budget view?
+        // Usually, liquid assets aren't "Income to be made this month", they are "Assets".
+        // However, user asked for it to be a Planned Income. We will count it.
         const pendingPlanned = plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && pt.status === 'pending');
+        
+        // 3. Generated Card Invoices (Pending only)
+        const pendingCards = generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix) && pt.status === 'pending');
 
-        const plannedExpense = pendingPlanned.filter(pt => pt.type === 'expense').reduce((sum, pt) => sum + pt.amount, 0);
-        const plannedIncome = pendingPlanned.filter(pt => pt.type === 'income').reduce((sum, pt) => sum + pt.amount, 0);
+        const allPending = [...pendingPlanned, ...pendingCards];
+
+        const plannedExpense = allPending.filter(pt => pt.type === 'expense').reduce((sum, pt) => sum + pt.amount, 0);
+        const plannedIncome = allPending.filter(pt => pt.type === 'income').reduce((sum, pt) => sum + pt.amount, 0);
 
         return { income, expense, plannedExpense, plannedIncome };
-    }, [transactions, plannedTransactions]);
+    }, [transactions, plannedTransactions, generatedCardInvoices]);
 
     // --- Backup & Restore ---
     
@@ -242,6 +417,7 @@ export const useFinanceData = () => {
         totalBalance,
         getMonthlySummary,
         plannedTransactions,
+        generatedCardInvoices, // Export this so App.tsx can list them
         addPlannedTransaction,
         updatePlannedTransaction,
         deletePlannedTransaction,
