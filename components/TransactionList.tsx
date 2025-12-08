@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Transaction, Category } from '../types';
 
@@ -8,6 +9,8 @@ interface TransactionListProps {
   onDelete: (id: string) => void;
   onViewAll: () => void;
 }
+
+const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
 
 export const TransactionListItem: React.FC<{ 
     transaction: Transaction; 
@@ -54,7 +57,7 @@ export const TransactionListItem: React.FC<{
         <div>
           <p className="font-semibold text-gray-800 dark:text-gray-100">{transaction.description || category?.name}</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {new Date(transaction.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {parseDateAsUTC(transaction.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
           </p>
         </div>
       </div>

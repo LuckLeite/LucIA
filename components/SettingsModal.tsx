@@ -1,0 +1,110 @@
+import React, { useState, useRef } from 'react';
+import Modal from './ui/Modal';
+import { useFinanceData } from '../hooks/useFinanceData';
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  exportData: () => void;
+  importData: (json: string) => boolean;
+  clearAllData: () => void;
+}
+
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportData, importData, clearAllData }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const success = importData(text);
+            setImportStatus(success ? 'success' : 'error');
+            if(success) {
+                 setTimeout(() => {
+                     onClose();
+                     setImportStatus('idle');
+                 }, 1500);
+            }
+        };
+        reader.readAsText(file);
+        // Reset input
+        e.target.value = '';
+    };
+
+    const handleClearClick = () => {
+        if(window.confirm("Tem certeza que deseja apagar TODOS os dados? Essa ação não pode ser desfeita.")) {
+            clearAllData();
+            onClose();
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Gerenciamento de Dados">
+            <div className="space-y-6">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                    <p className="font-semibold mb-1">Modo Offline / Local</p>
+                    <p>Seus dados estão salvos apenas neste navegador/computador. Faça backups regularmente para garantir que não perderá suas informações.</p>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex flex-col gap-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">Backup e Restauração</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Gera um arquivo JSON com todas as suas transações.</p>
+                        
+                        <div className="flex gap-3 mt-2">
+                            <button 
+                                onClick={exportData}
+                                className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded shadow-sm flex items-center justify-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                Exportar Dados
+                            </button>
+                            
+                            <button 
+                                onClick={handleImportClick}
+                                className="flex-1 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 font-semibold py-2 px-4 rounded shadow-sm flex items-center justify-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Importar Backup
+                            </button>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileChange} 
+                                accept=".json" 
+                                className="hidden" 
+                            />
+                        </div>
+                        {importStatus === 'success' && <p className="text-green-600 text-sm mt-1">Dados importados com sucesso!</p>}
+                        {importStatus === 'error' && <p className="text-red-600 text-sm mt-1">Erro ao importar arquivo. Verifique o formato.</p>}
+                    </div>
+
+                    <div className="pt-4 border-t dark:border-slate-700">
+                         <h3 className="font-semibold text-red-600 dark:text-red-400 mb-2">Zona de Perigo</h3>
+                         <button 
+                            onClick={handleClearClick}
+                            className="w-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 font-semibold py-2 px-4 rounded flex items-center justify-center gap-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            Apagar Tudo (Resetar App)
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                    <button onClick={onClose} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200">Fechar</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+export default SettingsModal;

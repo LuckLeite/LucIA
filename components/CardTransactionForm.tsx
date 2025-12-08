@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { CardTransaction } from '../types';
 
@@ -6,6 +7,8 @@ interface CardTransactionFormProps {
   transactionToEdit?: CardTransaction | null;
   onCancelEdit: () => void;
 }
+
+const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
 
 const CardTransactionForm: React.FC<CardTransactionFormProps> = ({ onSubmit, transactionToEdit, onCancelEdit }) => {
   const [name, setName] = useState('');
@@ -28,7 +31,7 @@ const CardTransactionForm: React.FC<CardTransactionFormProps> = ({ onSubmit, tra
       setCard(transactionToEdit.card);
       setTotalAmount(String(transactionToEdit.totalAmount));
       setInstallments(String(transactionToEdit.installments));
-      setPurchaseDate(new Date(transactionToEdit.purchaseDate).toISOString().split('T')[0]);
+      setPurchaseDate(parseDateAsUTC(transactionToEdit.purchaseDate).toISOString().split('T')[0]);
     } else {
       resetForm();
     }

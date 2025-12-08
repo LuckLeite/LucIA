@@ -1,0 +1,27 @@
+-- This script enables access to the tables for anonymous users.
+-- Supabase enables Row Level Security (RLS) by default, which means
+-- no one can access the data until a policy is created.
+
+-- Grant access to 'transactions' table
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public access for transactions"
+ON transactions
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+-- Grant access to 'planned_transactions' table
+ALTER TABLE planned_transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public access for planned transactions"
+ON planned_transactions
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+-- Grant access to 'card_transactions' table
+ALTER TABLE card_transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public access for card transactions"
+ON card_transactions
+FOR ALL
+USING (true)
+WITH CHECK (true);

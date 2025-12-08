@@ -1,0 +1,64 @@
+
+-- Create the transactions table
+CREATE TABLE transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  amount REAL NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  category_id TEXT NOT NULL,
+  date DATE NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Create the planned_transactions table
+CREATE TABLE planned_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  amount REAL NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  category_id TEXT NOT NULL,
+  description TEXT,
+  due_date DATE NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'paid')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Create the card_transactions table
+CREATE TABLE card_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  card TEXT NOT NULL,
+  total_amount REAL NOT NULL,
+  installments INTEGER NOT NULL,
+  purchase_date DATE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security (RLS) for all tables
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE planned_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE card_transactions ENABLE ROW LEVEL SECURITY;
+
+-- Create policies to allow public access (for anonymous users)
+-- This is suitable for a simple, single-user setup where the data is protected by the obscurity of the URL and anon key.
+-- For multi-user apps, you would create policies based on user IDs (e.g., using auth.uid()).
+
+-- Policy for transactions
+CREATE POLICY "Public access for transactions"
+ON transactions
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+-- Policy for planned_transactions
+CREATE POLICY "Public access for planned transactions"
+ON planned_transactions
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+-- Policy for card_transactions
+CREATE POLICY "Public access for card transactions"
+ON card_transactions
+FOR ALL
+USING (true)
+WITH CHECK (true);

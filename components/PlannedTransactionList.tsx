@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { PlannedTransaction, Category } from '../types';
 
@@ -7,8 +8,10 @@ interface PlannedTransactionListProps {
   onAdd: () => void;
   onEdit: (transaction: PlannedTransaction) => void;
   onDelete: (id: string) => void;
-  onMarkAsPaid: (id: string) => void;
+  onMarkAsPaid: (transaction: PlannedTransaction) => void;
 }
+
+const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
 
 const PlannedTransactionListItem: React.FC<{
   transaction: PlannedTransaction;
@@ -33,7 +36,7 @@ const PlannedTransactionListItem: React.FC<{
         <div>
           <p className={`font-semibold text-gray-800 dark:text-gray-100 ${isPaid && 'line-through'}`}>{transaction.description || category?.name}</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Vencimento: {new Date(transaction.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+            Vencimento: {parseDateAsUTC(transaction.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
              {isGenerated && <span className="ml-2 text-xs font-semibold text-blue-500 dark:text-blue-400">(Automático)</span>}
           </p>
         </div>
@@ -91,7 +94,7 @@ const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ planned
             category={categoryMap.get(pt.categoryId)}
             onEdit={() => onEdit(pt)}
             onDelete={() => onDelete(pt.id)}
-            onMarkAsPaid={() => onMarkAsPaid(pt.id)}
+            onMarkAsPaid={() => onMarkAsPaid(pt)}
           />
         ))}
       </ul>

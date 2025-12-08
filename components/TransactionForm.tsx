@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Transaction, Category, TransactionType } from '../types';
 
@@ -6,6 +7,8 @@ interface TransactionFormProps {
   transactionToEdit?: Transaction | null;
   categories: Category[];
 }
+
+const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
 
 const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, transactionToEdit, categories }) => {
   const [amount, setAmount] = useState('');
@@ -21,7 +24,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onSubmit, transaction
       setAmount(String(transactionToEdit.amount));
       setType(transactionToEdit.type);
       setCategoryId(transactionToEdit.categoryId);
-      setDate(new Date(transactionToEdit.date).toISOString().split('T')[0]);
+      setDate(parseDateAsUTC(transactionToEdit.date).toISOString().split('T')[0]);
       setDescription(transactionToEdit.description);
     } else {
         // Reset form
