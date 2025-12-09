@@ -12,6 +12,8 @@ import CategoryPieChart from './components/charts/CategoryPieChart';
 import ImportModal from './components/ImportCSVModal';
 import CardView from './components/CardView';
 import SettingsModal from './components/SettingsModal';
+import CategoryList from './components/CategoryList';
+import CategoryForm from './components/CategoryForm';
 
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
 const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
@@ -38,18 +40,21 @@ const App: React.FC = () => {
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [isBulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [isCategoryFormOpen, setCategoryFormOpen] = useState(false);
   
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [transactionToDeleteId, setTransactionToDeleteId] = useState<string | null>(null);
   const [idsToDelete, setIdsToDelete] = useState<string[]>([]);
   const [plannedToEdit, setPlannedToEdit] = useState<PlannedTransaction | null>(null);
+  const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
   
   const {
     transactions, categories, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
-    plannedTransactions, generatedCardInvoices, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
+    plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
-    loading, error,
+    addCategory, updateCategory, deleteCategory,
+    loading, error, totalBalance,
     exportData, importData, clearAllData
   } = useFinanceData();
 
@@ -127,6 +132,17 @@ const App: React.FC = () => {
     } catch(e) { console.error(e) }
   };
 
+  const handleAddCategoryClick = () => { setCategoryToEdit(null); setCategoryFormOpen(true); };
+  const handleEditCategoryClick = (c: Category) => { setCategoryToEdit(c); setCategoryFormOpen(true); };
+  const handleCategorySubmit = (data: Omit<Category, 'id'> | Category) => {
+    if ('id' in data) {
+        updateCategory(data);
+    } else {
+        addCategory(data);
+    }
+    setCategoryFormOpen(false);
+  };
+
   const monthlySummary = useMemo(() => getMonthlySummary(displayDate), [getMonthlySummary, displayDate]);
   
   const monthPrefix = useMemo(() => displayDate.toISOString().slice(0, 7), [displayDate]); // "YYYY-MM"
@@ -135,13 +151,14 @@ const App: React.FC = () => {
 
   const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix)), [plannedTransactions, monthPrefix]);
   
-  // Filter generated invoices for this month
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
 
+  const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
+
   const combinedPlannedTransactions = useMemo(() => 
-    [...filteredPlannedTransactions, ...filteredCardInvoices]
+    [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing]
     .sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
-  [filteredPlannedTransactions, filteredCardInvoices]);
+  [filteredPlannedTransactions, filteredCardInvoices, filteredTithing]);
 
   const balanceChartData = useMemo(() => {
     const firstDayOfMonth = new Date(Date.UTC(displayDate.getFullYear(), displayDate.getMonth(), 1));
@@ -187,7 +204,7 @@ const App: React.FC = () => {
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
-    const categoryMap = new Map(categories.map((c: Category) => [c.id, c]));
+    const categoryMap = new Map<string, Category>(categories.map((c: Category) => [c.id, c]));
     filteredTransactions
         .filter(t => t.type === 'expense')
         .forEach(t => {
@@ -217,18 +234,19 @@ const App: React.FC = () => {
       <header className="bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-6">
-            <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">LucIA - Finance tracker</h1>
-            <nav className="hidden sm:flex items-center gap-4">
-                <button onClick={() => setView('dashboard')} className={`font-semibold px-3 py-1 rounded-md ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Dashboard</button>
-                <button onClick={() => setView('planned')} className={`font-semibold px-3 py-1 rounded-md ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Planejados</button>
-                <button onClick={() => setView('cards')} className={`font-semibold px-3 py-1 rounded-md ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Cartões</button>
+            <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">LucIA</h1>
+            <nav className="hidden md:flex items-center gap-2">
+                <button onClick={() => setView('dashboard')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Dashboard</button>
+                <button onClick={() => setView('planned')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Planejados</button>
+                <button onClick={() => setView('cards')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Cartões</button>
+                <button onClick={() => setView('categories')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Categorias</button>
             </nav>
           </div>
           <div className="flex items-center gap-4">
-             {view !== 'cards' && (
+             {view !== 'cards' && view !== 'categories' && (
                 <div className="flex items-center gap-2 text-lg font-semibold">
                     <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mês anterior"><ChevronLeftIcon /></button>
-                    <span className="w-36 text-center capitalize">{displayDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
+                    <span className="w-32 text-center capitalize text-sm sm:text-base">{displayDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</span>
                     <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Próximo mês"><ChevronRightIcon /></button>
                 </div>
              )}
@@ -237,9 +255,16 @@ const App: React.FC = () => {
              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mudar tema">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</button>
           </div>
         </div>
+        {/* Mobile Nav */}
+        <div className="md:hidden flex justify-around p-2 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
+             <button onClick={() => setView('dashboard')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Dashboard</button>
+             <button onClick={() => setView('planned')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Planejados</button>
+             <button onClick={() => setView('cards')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Cartões</button>
+             <button onClick={() => setView('categories')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Categorias</button>
+        </div>
       </header>
       
-      <main className="max-w-6xl mx-auto pb-10 w-full flex-grow">
+      <main className="max-w-6xl mx-auto pb-20 w-full flex-grow">
         {error && (
             <div className="m-4 p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="font-bold">Aviso:</p>
@@ -255,6 +280,7 @@ const App: React.FC = () => {
                     monthlyPlannedExpense={monthlySummary.plannedExpense}
                     monthlyPlannedIncome={monthlySummary.plannedIncome}
                     balanceChartData={balanceChartData}
+                    currentBalance={totalBalance}
                 />
                 <TransactionList 
                   transactions={filteredTransactions.slice(0, 5)} 
@@ -289,6 +315,13 @@ const App: React.FC = () => {
                 onDelete={deleteCardTransaction}
             />
         )}
+        {view === 'categories' && (
+            <CategoryList 
+                categories={categories}
+                onEdit={handleEditCategoryClick}
+                onDelete={deleteCategory}
+            />
+        )}
       </main>
 
       <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">
@@ -297,9 +330,17 @@ const App: React.FC = () => {
         
       {view !== 'cards' && (
         <div className="fixed bottom-6 right-6 z-30">
-            <button onClick={view === 'dashboard' ? handleAddTransactionClick : handleAddPlannedClick} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
+            <button onClick={() => {
+                if (view === 'dashboard') handleAddTransactionClick();
+                else if (view === 'planned') handleAddPlannedClick();
+                else if (view === 'categories') handleAddCategoryClick();
+            }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span className="hidden sm:inline">{view === 'dashboard' ? 'Nova Transação' : 'Novo Planejado'}</span>
+                <span className="hidden sm:inline">
+                    {view === 'dashboard' ? 'Nova Transação' : 
+                     view === 'planned' ? 'Novo Planejado' :
+                     view === 'categories' ? 'Nova Categoria' : ''}
+                </span>
             </button>
         </div>
       )}
@@ -318,6 +359,10 @@ const App: React.FC = () => {
 
       <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}>
         <PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} />
+      </Modal>
+
+      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
+        <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
       </Modal>
 
       <ImportModal 

@@ -35,7 +35,7 @@ export interface CardTransaction {
 export interface Category {
   id: string;
   name: string;
-  icon: FC<SVGProps<SVGSVGElement>>;
+  iconName: string; // Changed from Component to string for JSON storage
   color: string;
   type: TransactionType;
 }
@@ -49,4 +49,4 @@ export interface Budget {
 
 export type Theme = 'light' | 'dark';
 
-export type View = 'dashboard' | 'planned' | 'cards';
+export type View = 'dashboard' | 'planned' | 'cards' | 'categories';

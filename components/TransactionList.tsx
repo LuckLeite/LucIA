@@ -1,6 +1,6 @@
-
 import React from 'react';
 import type { Transaction, Category } from '../types';
+import { getIconComponent } from '../constants';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -21,7 +21,7 @@ export const TransactionListItem: React.FC<{
     isSelected?: boolean;
     onSelect?: (id: string) => void;
 }> = ({ transaction, category, onEdit, onDelete, showCheckbox, isSelected, onSelect }) => {
-  const Icon = category?.icon;
+  const Icon = category ? getIconComponent(category.iconName) : null;
   const isIncome = transaction.type === 'income';
 
   const handleRowClick = (e: React.MouseEvent) => {

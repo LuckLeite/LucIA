@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PlannedTransaction, Category } from '../types';
+import { getIconComponent } from '../constants';
 
 interface PlannedTransactionListProps {
   plannedTransactions: PlannedTransaction[];
@@ -19,7 +20,7 @@ const PlannedTransactionListItem: React.FC<{
   onDelete: () => void;
   onMarkAsPaid: () => void;
 }> = ({ transaction, category, onEdit, onDelete, onMarkAsPaid }) => {
-  const Icon = category?.icon;
+  const Icon = category ? getIconComponent(category.iconName) : null;
   const isIncome = transaction.type === 'income';
   const isPaid = transaction.status === 'paid';
   const isGenerated = transaction.isGenerated;
@@ -49,15 +50,13 @@ const PlannedTransactionListItem: React.FC<{
                 Dar Baixa
             </button>
         )}
+        <button onClick={onEdit} className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+        </button>
         {!isGenerated && (
-          <>
-            <button onClick={onEdit} className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-            </button>
             <button onClick={onDelete} className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
             </button>
-          </>
         )}
       </div>
     </li>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Transaction, PlannedTransaction, CardTransaction } from '../types';
+import type { Transaction, PlannedTransaction, CardTransaction, Category } from '../types';
 import { INITIAL_CATEGORIES } from '../constants';
 
 // Helper to generate IDs
@@ -22,7 +22,8 @@ const parseDateAsUTC = (dateString: string) => {
 const STORAGE_KEYS = {
     TRANSACTIONS: 'lucia_transactions',
     PLANNED: 'lucia_planned_transactions',
-    CARDS: 'lucia_card_transactions'
+    CARDS: 'lucia_card_transactions',
+    CATEGORIES: 'lucia_categories'
 };
 
 const MOVEMENT_BALANCE_DESC = 'Saldo Acumulado Movimento';
@@ -31,6 +32,7 @@ export const useFinanceData = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [plannedTransactions, setPlannedTransactions] = useState<PlannedTransaction[]>([]);
     const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
+    const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -40,10 +42,16 @@ export const useFinanceData = () => {
             const storedTransactions = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
             const storedPlanned = localStorage.getItem(STORAGE_KEYS.PLANNED);
             const storedCards = localStorage.getItem(STORAGE_KEYS.CARDS);
+            const storedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
 
             if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
             if (storedPlanned) setPlannedTransactions(JSON.parse(storedPlanned));
             if (storedCards) setCardTransactions(JSON.parse(storedCards));
+            if (storedCategories) {
+                setCategories(JSON.parse(storedCategories));
+            } else {
+                setCategories(INITIAL_CATEGORIES);
+            }
         } catch (err) {
             console.error("Failed to load data from local storage", err);
             setError("Falha ao carregar dados locais.");
@@ -71,13 +79,16 @@ export const useFinanceData = () => {
         localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(sorted));
     };
 
+    const saveCategories = (data: Category[]) => {
+        setCategories(data);
+        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
+    };
+
     // --- Dynamic Card Invoices Generation ---
-    // Generates invoices for all time, but marks them as paid if a matching transaction exists
     const generatedCardInvoices = useMemo(() => {
         const invoices: PlannedTransaction[] = [];
         const invoicesByCardAndMonth = new Map<string, number>();
         
-        // 1. Calculate totals per month/card
         cardTransactions.forEach(cardTx => {
             const monthlyPayment = cardTx.totalAmount / cardTx.installments;
             const purchaseDate = parseDateAsUTC(cardTx.purchaseDate);
@@ -85,7 +96,6 @@ export const useFinanceData = () => {
             for (let i = 1; i <= cardTx.installments; i++) {
                 const dueDate = new Date(purchaseDate);
                 dueDate.setUTCMonth(purchaseDate.getUTCMonth() + i);
-                // Set fixed due day (e.g., 10th)
                 dueDate.setUTCDate(10);
                 
                 const key = `${cardTx.card}_${dueDate.getUTCFullYear()}_${dueDate.getUTCMonth()}`;
@@ -94,19 +104,20 @@ export const useFinanceData = () => {
             }
         });
 
-        // 2. Convert to PlannedTransaction objects
         invoicesByCardAndMonth.forEach((amount, key) => {
             const [cardName, yearStr, monthStr] = key.split('_');
             const year = parseInt(yearStr);
             const month = parseInt(monthStr);
+            const id = `card_invoice_${key}`;
             
-            // Reconstruct date string YYYY-MM-DD
+            // Check if this invoice has been overridden by a manual planned transaction
+            const overridden = plannedTransactions.some(pt => pt.id === id);
+            if (overridden) return;
+
             const dueDateObj = new Date(Date.UTC(year, month, 10));
             const dueDateString = dueDateObj.toISOString().split('T')[0];
             const description = `Fatura Cartão ${cardName}`;
 
-            // 3. Check if it's already paid
-            // We look for a real transaction in the same month, same category (card), same description (approx)
             const isPaid = transactions.some(tx => {
                 const txDate = parseDateAsUTC(tx.date);
                 return tx.categoryId === 'cat_expense_card' &&
@@ -116,7 +127,7 @@ export const useFinanceData = () => {
             });
 
             invoices.push({
-                id: `card_invoice_${key}`,
+                id: id,
                 amount: amount,
                 type: 'expense',
                 categoryId: 'cat_expense_card',
@@ -128,20 +139,119 @@ export const useFinanceData = () => {
         });
 
         return invoices;
-    }, [cardTransactions, transactions]);
+    }, [cardTransactions, transactions, plannedTransactions]);
+
+    // --- Automatic Tithing (Dizimo) Logic ---
+    
+    // 1. Calculate Expected Tithing Map (MonthKey -> Amount)
+    const expectedTithingMap = useMemo(() => {
+        const map = new Map<string, number>();
+        const monthsSet = new Set<string>();
+
+        // Identify all months present in transactions
+        transactions.forEach(tx => {
+             const monthKey = tx.date.slice(0, 7); // YYYY-MM
+             monthsSet.add(monthKey);
+        });
+        // Always include current month
+        monthsSet.add(new Date().toISOString().slice(0, 7));
+
+        monthsSet.forEach(monthKey => {
+            let totalValidIncome = 0;
+            transactions.filter(tx => tx.date.startsWith(monthKey) && tx.type === 'income').forEach(tx => {
+                // Exclude specific categories: Movimento, Estorno, Retorno de Investimento
+                if (
+                    tx.categoryId !== 'cat_income_movement' &&
+                    tx.categoryId !== 'cat_income_reversal' &&
+                    tx.categoryId !== 'cat_income_investment_return'
+                ) {
+                    totalValidIncome += tx.amount;
+                }
+            });
+
+            if (totalValidIncome > 0) {
+                map.set(monthKey, totalValidIncome * 0.10);
+            }
+        });
+        return map;
+    }, [transactions]);
+
+    // 2. Sync Effect: Update saved planned transactions if income changed
+    // This ensures that even if you edited the date (saving the item), the amount updates if your income updates.
+    useEffect(() => {
+        let hasUpdates = false;
+        const updatedPlanned = plannedTransactions.map(pt => {
+            // Check if this is a tithing item (by ID convention or category)
+            if (pt.categoryId === 'cat_expense_tithing' && pt.id.startsWith('tithing_')) {
+                // Parse the month from ID or DueDate? Use ID convention for stability: tithing_YYYY_MM (where MM is 0-indexed)
+                const parts = pt.id.split('_');
+                if (parts.length === 3) {
+                    const year = parts[1];
+                    const monthIndex = parseInt(parts[2]);
+                    // Construct monthKey YYYY-MM
+                    const monthKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+                    
+                    const expectedAmount = expectedTithingMap.get(monthKey);
+                    
+                    // If we have an expected amount and it differs from stored amount, update it
+                    // Tolerance for float precision
+                    if (expectedAmount !== undefined && Math.abs(pt.amount - expectedAmount) > 0.01) {
+                        hasUpdates = true;
+                        return { ...pt, amount: expectedAmount };
+                    }
+                }
+            }
+            return pt;
+        });
+
+        if (hasUpdates) {
+            savePlanned(updatedPlanned);
+        }
+    }, [expectedTithingMap, plannedTransactions]);
+
+    // 3. Generator for Display (Virtual Items that haven't been saved/edited yet)
+    const generatedTithing = useMemo(() => {
+        const tithingItems: PlannedTransaction[] = [];
+        
+        expectedTithingMap.forEach((amount, monthKey) => {
+            const [year, month] = monthKey.split('-').map(Number);
+            const id = `tithing_${year}_${month - 1}`; // ID uses 0-indexed month
+
+            // Only generate if NOT in plannedTransactions (because the useEffect handles the saved ones)
+            const exists = plannedTransactions.some(pt => pt.id === id);
+            
+            if (!exists) {
+                 // Check if paid in real transactions
+                 const isPaid = transactions.some(tx => {
+                     return tx.categoryId === 'cat_expense_tithing' &&
+                            tx.date.startsWith(monthKey);
+                 });
+
+                 tithingItems.push({
+                    id: id,
+                    amount: amount,
+                    type: 'expense',
+                    categoryId: 'cat_expense_tithing',
+                    description: `Dízimo Calculado (${monthKey})`,
+                    dueDate: `${monthKey}-10`, // Default to 10th
+                    status: isPaid ? 'paid' : 'pending',
+                    isGenerated: true
+                 });
+            }
+        });
+
+        return tithingItems;
+    }, [expectedTithingMap, plannedTransactions, transactions]);
+
 
     // --- Transactions & Automatic Movement Logic ---
 
-    // Logic to handle "Movement" category automation
-    // If adding Expense Movement -> Increase Planned Income (Movement Balance)
-    // If adding Income Movement -> Decrease Planned Income (Movement Balance)
     const updateMovementBalance = (
         currentPlanned: PlannedTransaction[],
-        amountDelta: number, // Positive adds to balance, Negative removes
+        amountDelta: number,
         dateReference: string
     ) => {
         let updated = [...currentPlanned];
-        // Find existing 'Saldo Acumulado Movimento' that is pending
         let balanceItem = updated.find(p =>
             p.categoryId === 'cat_income_movement' &&
             p.status === 'pending' &&
@@ -151,14 +261,11 @@ export const useFinanceData = () => {
         if (balanceItem) {
             const newAmount = balanceItem.amount + amountDelta;
             if (newAmount <= 0.01) {
-                 // Balance depleted, remove the planned item
                  updated = updated.filter(p => p.id !== balanceItem!.id);
             } else {
-                 // Update balance
                  updated = updated.map(p => p.id === balanceItem!.id ? { ...p, amount: newAmount } : p);
             }
         } else if (amountDelta > 0) {
-            // Create new balance item if we are adding funds and none exists
             updated.push({
                 id: generateUUID(),
                 categoryId: 'cat_income_movement',
@@ -170,7 +277,6 @@ export const useFinanceData = () => {
                 isGenerated: true
             });
         }
-        // If amountDelta < 0 and no item exists, we do nothing (cannot subtract from empty)
         return updated;
     };
 
@@ -178,13 +284,10 @@ export const useFinanceData = () => {
         const newTx: Transaction = { ...transaction, id: generateUUID() };
         const newTransactionsList = [newTx, ...transactions]; 
 
-        // Movement Logic
         let updatedPlanned = plannedTransactions;
         if (newTx.categoryId === 'cat_expense_movement') {
-             // Expense means money went into savings -> Add to Planned Income Balance
              updatedPlanned = updateMovementBalance(updatedPlanned, newTx.amount, newTx.date);
         } else if (newTx.categoryId === 'cat_income_movement') {
-             // Income means money came back from savings -> Deduct from Planned Income Balance
              updatedPlanned = updateMovementBalance(updatedPlanned, -newTx.amount, newTx.date);
         }
 
@@ -195,7 +298,6 @@ export const useFinanceData = () => {
     const addMultipleTransactions = useCallback(async (newTransactions: Omit<Transaction, 'id'>[]) => {
         const formatted = newTransactions.map(t => ({ ...t, id: generateUUID() }));
         
-        // Calculate Net Movement Change first to apply in one go (cleaner)
         let movementNetChange = 0;
         let refDate = new Date().toISOString().split('T')[0];
 
@@ -249,7 +351,6 @@ export const useFinanceData = () => {
             for (let i = 0; i < recurrenceCount; i++) {
                 const nextDueDate = new Date(lastDueDate);
                 nextDueDate.setUTCMonth(nextDueDate.getUTCMonth() + 1);
-                // Adjust for end of month (e.g. Jan 31 -> Feb 28)
                 if (nextDueDate.getUTCMonth() !== (lastDueDate.getUTCMonth() + 1) % 12) nextDueDate.setUTCDate(0);
                 
                 transactionsToAdd.push({ 
@@ -265,8 +366,20 @@ export const useFinanceData = () => {
     }, [plannedTransactions]);
 
     const updatePlannedTransaction = useCallback(async (updated: PlannedTransaction) => {
-        const updatedList = plannedTransactions.map(t => t.id === updated.id ? updated : t);
-        savePlanned(updatedList);
+        // If updating a Generated Transaction (like card invoice or automatic tithing),
+        // we essentially "Materialize" it into a real planned transaction by keeping its ID 
+        // to handle the override logic/sync logic.
+        
+        const exists = plannedTransactions.some(t => t.id === updated.id);
+        
+        if (exists) {
+            const updatedList = plannedTransactions.map(t => t.id === updated.id ? updated : t);
+            savePlanned(updatedList);
+        } else {
+            // It was a generated one, now we save it as a real one.
+            const materialized: PlannedTransaction = { ...updated, isGenerated: false }; 
+            savePlanned([...plannedTransactions, materialized]);
+        }
     }, [plannedTransactions]);
 
     const deletePlannedTransaction = useCallback(async (id: string) => {
@@ -284,25 +397,19 @@ export const useFinanceData = () => {
             type: planned.type,
         };
         
-        // 1. Add the real transaction
-        // NOTE: We do NOT call addTransaction() here to avoid double-triggering logic (circular ref), 
-        // but we DO need to handle movement logic if the planned transaction was a movement one.
-        
         let updatedPlanned = plannedTransactions;
         
-        // If we are paying a "Planned Movement Income", we are effectively moving money back.
-        // The planned item itself (the balance) needs to be reduced/removed.
         if (planned.categoryId === 'cat_income_movement') {
-             // Logic: If I pay a "Movement Income" of 1000, I receive 1000 real money.
-             // The balance (which is this planned item) should be reduced by 1000.
-             // Since 'mark as paid' usually just updates status, for the movement balance we might want to keep it if it's a partial pay?
-             // But 'markAsPaid' implies full conversion.
-             
-             // However, for the 'Saldo Acumulado Movimento', the user usually won't click 'Dar Baixa' on the whole pot unless withdrawing everything.
-             // If they click 'Dar Baixa', we assume they withdrew the whole amount shown.
              updatedPlanned = updatedPlanned.filter(p => p.id !== planned.id);
         } else {
-            // Normal behavior for other planned items
+             // If marked as paid, we update status.
+             // Note: For tithing, even if paid, the sync effect will try to update the amount if income changes.
+             // This is good behavior (if income grows, the liability in the saved record grows, even if marked paid).
+             // But usually once paid, it's done. 
+             // However, for Tithing, often you pay what you owe *at that time*.
+             // If we want to stop updating once paid, we can add a check in the useEffect.
+             // For now, let's allow it to update so user knows the total liability.
+             
              if (!planned.isGenerated) {
                 const updatedPlannedTx: PlannedTransaction = { ...planned, status: 'paid' };
                 updatedPlanned = updatedPlanned.map(t => t.id === planned.id ? updatedPlannedTx : t);
@@ -310,9 +417,25 @@ export const useFinanceData = () => {
         }
 
         saveTransactions([newTransaction, ...transactions]);
-        savePlanned(updatedPlanned);
+        if(updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
 
     }, [plannedTransactions, transactions]);
+
+    // --- Category Management ---
+
+    const addCategory = useCallback((category: Omit<Category, 'id'>) => {
+        const newCategory: Category = { ...category, id: generateUUID() };
+        saveCategories([...categories, newCategory]);
+    }, [categories]);
+
+    const updateCategory = useCallback((updated: Category) => {
+        saveCategories(categories.map(c => c.id === updated.id ? updated : c));
+    }, [categories]);
+
+    const deleteCategory = useCallback((id: string) => {
+        saveCategories(categories.filter(c => c.id !== id));
+    }, [categories]);
+
 
     // --- Card Transactions ---
 
@@ -345,22 +468,18 @@ export const useFinanceData = () => {
             if (tx.type === 'income') income += tx.amount; else expense += tx.amount;
         });
 
-        // 2. Manual Planned Transactions
-        // Exclude Movement Balance from "Monthly Planned Income" sum if you don't want it to skew the monthly budget view?
-        // Usually, liquid assets aren't "Income to be made this month", they are "Assets".
-        // However, user asked for it to be a Planned Income. We will count it.
+        // 2. Planned
         const pendingPlanned = plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && pt.status === 'pending');
-        
-        // 3. Generated Card Invoices (Pending only)
         const pendingCards = generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix) && pt.status === 'pending');
+        const pendingTithing = generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix) && pt.status === 'pending');
 
-        const allPending = [...pendingPlanned, ...pendingCards];
+        const allPending = [...pendingPlanned, ...pendingCards, ...pendingTithing];
 
         const plannedExpense = allPending.filter(pt => pt.type === 'expense').reduce((sum, pt) => sum + pt.amount, 0);
         const plannedIncome = allPending.filter(pt => pt.type === 'income').reduce((sum, pt) => sum + pt.amount, 0);
 
         return { income, expense, plannedExpense, plannedIncome };
-    }, [transactions, plannedTransactions, generatedCardInvoices]);
+    }, [transactions, plannedTransactions, generatedCardInvoices, generatedTithing]);
 
     // --- Backup & Restore ---
     
@@ -369,6 +488,7 @@ export const useFinanceData = () => {
             transactions,
             plannedTransactions,
             cardTransactions,
+            categories,
             exportDate: new Date().toISOString()
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -388,6 +508,7 @@ export const useFinanceData = () => {
             if(data.transactions) saveTransactions(data.transactions);
             if(data.plannedTransactions) savePlanned(data.plannedTransactions);
             if(data.cardTransactions) saveCards(data.cardTransactions);
+            if(data.categories) saveCategories(data.categories);
             return true;
         } catch(e) {
             console.error(e);
@@ -396,18 +517,13 @@ export const useFinanceData = () => {
     };
 
     const clearAllData = () => {
-        localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
-        localStorage.removeItem(STORAGE_KEYS.PLANNED);
-        localStorage.removeItem(STORAGE_KEYS.CARDS);
-        setTransactions([]);
-        setPlannedTransactions([]);
-        setCardTransactions([]);
+        localStorage.clear();
+        window.location.reload();
     };
 
     return {
         transactions,
-        categories: INITIAL_CATEGORIES,
-        budgets: [],
+        categories,
         addTransaction,
         addMultipleTransactions,
         updateTransaction,
@@ -417,7 +533,8 @@ export const useFinanceData = () => {
         totalBalance,
         getMonthlySummary,
         plannedTransactions,
-        generatedCardInvoices, // Export this so App.tsx can list them
+        generatedCardInvoices, 
+        generatedTithing,
         addPlannedTransaction,
         updatePlannedTransaction,
         deletePlannedTransaction,
@@ -426,6 +543,9 @@ export const useFinanceData = () => {
         addCardTransaction,
         updateCardTransaction,
         deleteCardTransaction,
+        addCategory,
+        updateCategory,
+        deleteCategory,
         loading,
         error,
         exportData,

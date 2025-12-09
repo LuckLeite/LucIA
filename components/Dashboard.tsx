@@ -14,6 +14,7 @@ interface DashboardProps {
   monthlyPlannedExpense: number;
   monthlyPlannedIncome: number;
   balanceChartData: BalanceChartData[];
+  currentBalance: number;
 }
 
 const StatCard: React.FC<{ title: string; amount: number; color?: string; icon: React.ReactNode }> = ({ title, amount, color, icon }) => (
@@ -37,13 +38,12 @@ const PlannedExpenseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="
 const PlannedIncomeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14v4"/><path d="M10 16h4"/></svg>;
 
 
-const Dashboard: React.FC<DashboardProps> = ({ monthlyIncome, monthlyExpense, monthlyPlannedExpense, monthlyPlannedIncome, balanceChartData }) => {
-  const projectedMonthlyBalance = (monthlyIncome + monthlyPlannedIncome) - (monthlyExpense + monthlyPlannedExpense);
-
+const Dashboard: React.FC<DashboardProps> = ({ monthlyIncome, monthlyExpense, monthlyPlannedExpense, monthlyPlannedIncome, balanceChartData, currentBalance }) => {
+  
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-        <StatCard title="Saldo Projetado (Mês)" amount={projectedMonthlyBalance} color={projectedMonthlyBalance >= 0 ? 'text-income' : 'text-expense'} icon={<BalanceIcon />} />
+        <StatCard title="Saldo Atual" amount={currentBalance} color={currentBalance >= 0 ? 'text-income' : 'text-expense'} icon={<BalanceIcon />} />
         <StatCard title="Receitas (Mês)" amount={monthlyIncome} color="text-income" icon={<IncomeIcon />} />
         <StatCard title="Receitas Planejadas" amount={monthlyPlannedIncome} color="text-cyan-500" icon={<PlannedIncomeIcon />} />
         <StatCard title="Despesas (Mês)" amount={monthlyExpense} color="text-expense" icon={<ExpenseIcon />} />
