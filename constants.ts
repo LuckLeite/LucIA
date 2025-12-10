@@ -105,16 +105,16 @@ export const getIconComponent = (iconName: string): React.FC<React.SVGProps<SVGS
 
 export const INITIAL_CATEGORIES: Category[] = [
   // Receitas
-  { id: 'cat_income_salary', name: 'Salário', iconName: 'DollarSign', color: '#16a34a', type: 'income' },
-  { id: 'cat_income_accounting', name: 'Contabilidade', iconName: 'Receipt', color: '#15803d', type: 'income' },
-  { id: 'cat_income_reversal', name: 'Estorno', iconName: 'Undo2', color: '#059669', type: 'income' },
-  { id: 'cat_income_others', name: 'Outros', iconName: 'MoreHorizontal', color: '#047857', type: 'income' },
-  { id: 'cat_income_cashback', name: 'Cashback', iconName: 'Wallet', color: '#06b6d4', type: 'income' },
-  { id: 'cat_income_investment_return', name: 'Retorno de Investimento', iconName: 'TrendingUp', color: '#0891b2', type: 'income' },
-  { id: 'cat_income_sales', name: 'Vendas', iconName: 'Tag', color: '#0e7490', type: 'income' },
-  { id: 'cat_income_dividends', name: 'Dividendos', iconName: 'Sprout', color: '#155e75', type: 'income' },
-  { id: 'cat_income_movement', name: 'Movimento', iconName: 'Repeat', color: '#164e63', type: 'income' },
-  { id: 'cat_income_imported', name: 'Importado - Receita', iconName: 'ImportFile', color: '#0d9488', type: 'income' },
+  { id: 'cat_income_salary', name: 'Salário', iconName: 'DollarSign', color: '#16a34a', type: 'income', includeInTithing: true },
+  { id: 'cat_income_accounting', name: 'Contabilidade', iconName: 'Receipt', color: '#15803d', type: 'income', includeInTithing: true },
+  { id: 'cat_income_reversal', name: 'Estorno', iconName: 'Undo2', color: '#059669', type: 'income', includeInTithing: false },
+  { id: 'cat_income_others', name: 'Outros', iconName: 'MoreHorizontal', color: '#047857', type: 'income', includeInTithing: true },
+  { id: 'cat_income_cashback', name: 'Cashback', iconName: 'Wallet', color: '#06b6d4', type: 'income', includeInTithing: true },
+  { id: 'cat_income_investment_return', name: 'Retorno de Investimento', iconName: 'TrendingUp', color: '#0891b2', type: 'income', includeInTithing: false },
+  { id: 'cat_income_sales', name: 'Vendas', iconName: 'Tag', color: '#0e7490', type: 'income', includeInTithing: true },
+  { id: 'cat_income_dividends', name: 'Dividendos', iconName: 'Sprout', color: '#155e75', type: 'income', includeInTithing: true },
+  { id: 'cat_income_movement', name: 'Movimento', iconName: 'Repeat', color: '#164e63', type: 'income', includeInTithing: false },
+  { id: 'cat_income_imported', name: 'Importado - Receita', iconName: 'ImportFile', color: '#0d9488', type: 'income', includeInTithing: true },
 
   // Despesas
   { id: 'cat_expense_food', name: 'Alimentação', iconName: 'Utensils', color: '#ea580c', type: 'expense' },

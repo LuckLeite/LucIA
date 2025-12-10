@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import Modal from './ui/Modal';
-import { useFinanceData } from '../hooks/useFinanceData';
+import type { AppSettings } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -8,9 +8,11 @@ interface SettingsModalProps {
   exportData: () => void;
   importData: (json: string) => boolean;
   clearAllData: () => void;
+  settings: AppSettings;
+  updateSettings: (settings: AppSettings) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportData, importData, clearAllData }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportData, importData, clearAllData, settings, updateSettings }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -46,17 +48,45 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
         }
     };
 
+    const toggleTithing = () => {
+        updateSettings({
+            ...settings,
+            calculateTithing: !settings.calculateTithing
+        });
+    };
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Gerenciamento de Dados">
+        <Modal isOpen={isOpen} onClose={onClose} title="Gerenciamento e Configurações">
             <div className="space-y-6">
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-                    <p className="font-semibold mb-1">Modo Offline / Local</p>
-                    <p>Seus dados estão salvos apenas neste navegador/computador. Faça backups regularmente para garantir que não perderá suas informações.</p>
+                
+                {/* General Settings Section */}
+                <div className="space-y-4">
+                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 border-b dark:border-slate-700 pb-2">Geral</h3>
+                     
+                     <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-medium text-gray-800 dark:text-gray-200">Calcular dízimo automaticamente</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Gera um lançamento de despesa planejado (10%) baseado nas receitas do mês.</p>
+                        </div>
+                        <button 
+                            onClick={toggleTithing}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${settings.calculateTithing ? 'bg-primary-600' : 'bg-gray-200 dark:bg-slate-600'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${settings.calculateTithing ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                     </div>
                 </div>
 
-                <div className="space-y-4">
+
+                {/* Data Management Section */}
+                <div className="space-y-4 pt-4">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 border-b dark:border-slate-700 pb-2">Dados</h3>
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                        <p className="font-semibold mb-1">Modo Offline / Local</p>
+                        <p>Seus dados estão salvos apenas neste navegador/computador. Faça backups regularmente para garantir que não perderá suas informações.</p>
+                    </div>
+
                     <div className="flex flex-col gap-2">
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100">Backup e Restauração</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Gera um arquivo JSON com todas as suas transações.</p>
                         
                         <div className="flex gap-3 mt-2">

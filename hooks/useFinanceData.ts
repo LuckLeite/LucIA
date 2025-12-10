@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Transaction, PlannedTransaction, CardTransaction, Category } from '../types';
+import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings } from '../types';
 import { INITIAL_CATEGORIES } from '../constants';
 
 // Helper to generate IDs
@@ -23,7 +23,12 @@ const STORAGE_KEYS = {
     TRANSACTIONS: 'lucia_transactions',
     PLANNED: 'lucia_planned_transactions',
     CARDS: 'lucia_card_transactions',
-    CATEGORIES: 'lucia_categories'
+    CATEGORIES: 'lucia_categories',
+    SETTINGS: 'lucia_settings'
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+    calculateTithing: true,
 };
 
 const MOVEMENT_BALANCE_DESC = 'Saldo Acumulado Movimento';
@@ -33,6 +38,7 @@ export const useFinanceData = () => {
     const [plannedTransactions, setPlannedTransactions] = useState<PlannedTransaction[]>([]);
     const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
     const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+    const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -43,14 +49,29 @@ export const useFinanceData = () => {
             const storedPlanned = localStorage.getItem(STORAGE_KEYS.PLANNED);
             const storedCards = localStorage.getItem(STORAGE_KEYS.CARDS);
             const storedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+            const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
 
             if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
             if (storedPlanned) setPlannedTransactions(JSON.parse(storedPlanned));
             if (storedCards) setCardTransactions(JSON.parse(storedCards));
+            
             if (storedCategories) {
-                setCategories(JSON.parse(storedCategories));
+                const loadedCategories = JSON.parse(storedCategories) as Category[];
+                // Migrate legacy categories: if includeInTithing is missing, set defaults based on INITIAL_CATEGORIES
+                const migratedCategories = loadedCategories.map(cat => {
+                    if (cat.includeInTithing !== undefined) return cat;
+                    // Find default match
+                    const defaultCat = INITIAL_CATEGORIES.find(d => d.id === cat.id);
+                    // Default to true if not found (new custom category) or match default
+                    return { ...cat, includeInTithing: defaultCat ? defaultCat.includeInTithing : true };
+                });
+                setCategories(migratedCategories);
             } else {
                 setCategories(INITIAL_CATEGORIES);
+            }
+
+            if (storedSettings) {
+                setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(storedSettings) });
             }
         } catch (err) {
             console.error("Failed to load data from local storage", err);
@@ -82,6 +103,11 @@ export const useFinanceData = () => {
     const saveCategories = (data: Category[]) => {
         setCategories(data);
         localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
+    };
+
+    const updateSettings = (newSettings: AppSettings) => {
+        setSettings(newSettings);
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
     };
 
     // --- Dynamic Card Invoices Generation ---
@@ -146,6 +172,10 @@ export const useFinanceData = () => {
     // 1. Calculate Expected Tithing Map (MonthKey -> Amount)
     const expectedTithingMap = useMemo(() => {
         const map = new Map<string, number>();
+        
+        // If feature is disabled globally, return empty map (stops generation and syncing)
+        if (!settings.calculateTithing) return map;
+
         const monthsSet = new Set<string>();
 
         // Identify all months present in transactions
@@ -159,12 +189,13 @@ export const useFinanceData = () => {
         monthsSet.forEach(monthKey => {
             let totalValidIncome = 0;
             transactions.filter(tx => tx.date.startsWith(monthKey) && tx.type === 'income').forEach(tx => {
-                // Exclude specific categories: Movimento, Estorno, Retorno de Investimento
-                if (
-                    tx.categoryId !== 'cat_income_movement' &&
-                    tx.categoryId !== 'cat_income_reversal' &&
-                    tx.categoryId !== 'cat_income_investment_return'
-                ) {
+                // Determine if category is included in tithing
+                const category = categories.find(c => c.id === tx.categoryId);
+                
+                // If category is found, use its setting. If not found (deleted?), default to false to be safe.
+                // Note: For legacy support, if includeInTithing is undefined, we assume false for known excluded ones or true otherwise?
+                // The loading migration handles the undefined case, so here we just check true.
+                if (category && category.includeInTithing) {
                     totalValidIncome += tx.amount;
                 }
             });
@@ -174,11 +205,14 @@ export const useFinanceData = () => {
             }
         });
         return map;
-    }, [transactions]);
+    }, [transactions, categories, settings.calculateTithing]);
 
     // 2. Sync Effect: Update saved planned transactions if income changed
     // This ensures that even if you edited the date (saving the item), the amount updates if your income updates.
     useEffect(() => {
+        // If settings disabled, we stop syncing updates (but we don't necessarily delete existing ones to prevent data loss)
+        if (!settings.calculateTithing) return;
+
         let hasUpdates = false;
         const updatedPlanned = plannedTransactions.map(pt => {
             // Check if this is a tithing item (by ID convention or category)
@@ -207,10 +241,12 @@ export const useFinanceData = () => {
         if (hasUpdates) {
             savePlanned(updatedPlanned);
         }
-    }, [expectedTithingMap, plannedTransactions]);
+    }, [expectedTithingMap, plannedTransactions, settings.calculateTithing]);
 
     // 3. Generator for Display (Virtual Items that haven't been saved/edited yet)
     const generatedTithing = useMemo(() => {
+        if (!settings.calculateTithing) return [];
+
         const tithingItems: PlannedTransaction[] = [];
         
         expectedTithingMap.forEach((amount, monthKey) => {
@@ -241,7 +277,7 @@ export const useFinanceData = () => {
         });
 
         return tithingItems;
-    }, [expectedTithingMap, plannedTransactions, transactions]);
+    }, [expectedTithingMap, plannedTransactions, transactions, settings.calculateTithing]);
 
 
     // --- Transactions & Automatic Movement Logic ---
@@ -382,9 +418,41 @@ export const useFinanceData = () => {
         }
     }, [plannedTransactions]);
 
-    const deletePlannedTransaction = useCallback(async (id: string) => {
-        const filtered = plannedTransactions.filter(t => t.id !== id);
-        savePlanned(filtered);
+    const deletePlannedTransaction = useCallback(async (id: string, deleteFuture: boolean = false) => {
+        if (!deleteFuture) {
+            const filtered = plannedTransactions.filter(t => t.id !== id);
+            savePlanned(filtered);
+        } else {
+            // Find target to know what to match against
+            const target = plannedTransactions.find(t => t.id === id);
+            if (!target) {
+                 // Fallback if not found (should not happen in UI flow)
+                 const filtered = plannedTransactions.filter(t => t.id !== id);
+                 savePlanned(filtered);
+                 return;
+            }
+
+            // Filter out target AND any future transactions that look identical (heuristics)
+            const filtered = plannedTransactions.filter(t => {
+                if (t.id === id) return false;
+
+                // Check for match
+                const isSameDescription = t.description === target.description;
+                const isSameCategory = t.categoryId === target.categoryId;
+                const isSameAmount = t.amount === target.amount; // Optional: could be stricter or looser
+                const isSameType = t.type === target.type;
+                
+                // Only delete if it is AFTER the current target
+                const isFuture = t.dueDate > target.dueDate;
+
+                if (isSameDescription && isSameCategory && isSameAmount && isSameType && isFuture) {
+                    return false; // Remove
+                }
+                return true; // Keep
+            });
+            
+            savePlanned(filtered);
+        }
     }, [plannedTransactions]);
 
     const markPlannedTransactionAsPaid = useCallback(async (planned: PlannedTransaction) => {
@@ -489,6 +557,7 @@ export const useFinanceData = () => {
             plannedTransactions,
             cardTransactions,
             categories,
+            settings,
             exportDate: new Date().toISOString()
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -509,6 +578,7 @@ export const useFinanceData = () => {
             if(data.plannedTransactions) savePlanned(data.plannedTransactions);
             if(data.cardTransactions) saveCards(data.cardTransactions);
             if(data.categories) saveCategories(data.categories);
+            if(data.settings) updateSettings(data.settings);
             return true;
         } catch(e) {
             console.error(e);
@@ -524,6 +594,8 @@ export const useFinanceData = () => {
     return {
         transactions,
         categories,
+        settings,
+        updateSettings,
         addTransaction,
         addMultipleTransactions,
         updateTransaction,

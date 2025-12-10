@@ -12,6 +12,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
   const [iconName, setIconName] = useState('Tag');
   const [color, setColor] = useState('#3b82f6');
   const [type, setType] = useState<TransactionType>('expense');
+  const [includeInTithing, setIncludeInTithing] = useState(true);
 
   useEffect(() => {
     if (categoryToEdit) {
@@ -19,11 +20,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
       setIconName(categoryToEdit.iconName);
       setColor(categoryToEdit.color);
       setType(categoryToEdit.type);
+      setIncludeInTithing(categoryToEdit.includeInTithing !== undefined ? categoryToEdit.includeInTithing : true);
     } else {
       setName('');
       setIconName('Tag');
       setColor('#3b82f6');
       setType('expense');
+      setIncludeInTithing(true);
     }
   }, [categoryToEdit]);
 
@@ -34,7 +37,15 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
         return;
     }
 
-    const data = { name, iconName, color, type };
+    const data = { 
+        name, 
+        iconName, 
+        color, 
+        type,
+        // Only save includeInTithing for income, undefined for expense (or false, but undefined is cleaner if not used)
+        includeInTithing: type === 'income' ? includeInTithing : undefined 
+    };
+
     if (categoryToEdit) {
         onSubmit({ ...data, id: categoryToEdit.id });
     } else {
@@ -77,6 +88,21 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
                 />
             </div>
         </div>
+
+        {type === 'income' && (
+             <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-slate-800 rounded-md border border-blue-100 dark:border-slate-700">
+                <input 
+                    type="checkbox" 
+                    id="includeInTithing"
+                    checked={includeInTithing}
+                    onChange={(e) => setIncludeInTithing(e.target.checked)}
+                    className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                />
+                <label htmlFor="includeInTithing" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                    Incluir no cálculo do dízimo?
+                </label>
+             </div>
+        )}
 
         <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ícone</label>

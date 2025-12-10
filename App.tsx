@@ -48,6 +48,11 @@ const App: React.FC = () => {
   const [plannedToEdit, setPlannedToEdit] = useState<PlannedTransaction | null>(null);
   const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
   
+  // Planned Deletion States
+  const [isPlannedDeleteModalOpen, setPlannedDeleteModalOpen] = useState(false);
+  const [plannedDeletionTarget, setPlannedDeletionTarget] = useState<PlannedTransaction | null>(null);
+  const [hasFutureMatches, setHasFutureMatches] = useState(false);
+
   const {
     transactions, categories, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
@@ -55,7 +60,7 @@ const App: React.FC = () => {
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
     addCategory, updateCategory, deleteCategory,
     loading, error, totalBalance,
-    exportData, importData, clearAllData
+    exportData, importData, clearAllData, settings, updateSettings
   } = useFinanceData();
 
   useEffect(() => {
@@ -120,6 +125,45 @@ const App: React.FC = () => {
   const handleAddPlannedClick = () => { setPlannedToEdit(null); setPlannedFormModalOpen(true); };
   const handleEditPlannedClick = (pt: PlannedTransaction) => { setPlannedToEdit(pt); setPlannedFormModalOpen(true); };
   
+  const handleRequestDeletePlanned = (id: string) => {
+    // Determine if we are deleting a saved planned transaction or a generated one (which might be just "hiding" it or not applicable)
+    // For generated transactions (isGenerated=true), usually they are not in the main array, but if they are passed here, handle gracefully.
+    
+    // Search in current planned list (which includes saved ones)
+    const target = plannedTransactions.find(t => t.id === id);
+    if (!target) {
+        // If not in saved list, it might be generated. For generated items, straightforward deletion (hiding) is usually okay,
+        // or effectively they don't persist so "future" deletion doesn't apply the same way.
+        // Let's just pass to standard delete for now.
+        deletePlannedTransaction(id);
+        return;
+    }
+
+    setPlannedDeletionTarget(target);
+    
+    // Check if there are future occurrences
+    const futures = plannedTransactions.filter(t => 
+        t.id !== target.id &&
+        t.description === target.description &&
+        t.categoryId === target.categoryId &&
+        t.amount === target.amount &&
+        t.dueDate > target.dueDate
+    );
+    
+    setHasFutureMatches(futures.length > 0);
+    setPlannedDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeletePlanned = async (deleteFuture: boolean) => {
+      if (plannedDeletionTarget) {
+          try {
+              await deletePlannedTransaction(plannedDeletionTarget.id, deleteFuture);
+          } catch(e) { console.error(e) }
+          setPlannedDeleteModalOpen(false);
+          setPlannedDeletionTarget(null);
+      }
+  };
+
   const handlePlannedFormSubmit = async (data: { transaction: Omit<PlannedTransaction, 'id' | 'status'> | PlannedTransaction, recurrenceCount: number }) => {
     const { transaction, recurrenceCount } = data;
     try {
@@ -234,7 +278,7 @@ const App: React.FC = () => {
       <header className="bg-white dark:bg-slate-800 shadow-sm sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-6">
-            <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">LucIA</h1>
+            <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">Flux</h1>
             <nav className="hidden md:flex items-center gap-2">
                 <button onClick={() => setView('dashboard')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Dashboard</button>
                 <button onClick={() => setView('planned')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Planejados</button>
@@ -303,7 +347,7 @@ const App: React.FC = () => {
                 categories={categories}
                 onAdd={handleAddPlannedClick}
                 onEdit={handleEditPlannedClick}
-                onDelete={deletePlannedTransaction}
+                onDelete={handleRequestDeletePlanned}
                 onMarkAsPaid={markPlannedTransactionAsPaid}
             />
         )}
@@ -351,6 +395,8 @@ const App: React.FC = () => {
         exportData={exportData}
         importData={importData}
         clearAllData={clearAllData}
+        settings={settings}
+        updateSettings={updateSettings}
       />
 
       <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}>
@@ -390,6 +436,40 @@ const App: React.FC = () => {
             <button onClick={() => setConfirmModalOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600">Cancelar</button>
             <button onClick={handleConfirmDelete} className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700">Apagar</button>
           </div>
+        </div>
+      </Modal>
+
+      {/* New Modal for Planned Deletion */}
+      <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento">
+        <div className="text-gray-700 dark:text-gray-300">
+            <p>Você deseja excluir este item planejado?</p>
+            {hasFutureMatches && (
+                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                    <p className="text-sm">Identificamos outros lançamentos futuros idênticos a este.</p>
+                </div>
+            )}
+            <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
+                <button 
+                    onClick={() => setPlannedDeleteModalOpen(false)} 
+                    className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    onClick={() => handleConfirmDeletePlanned(false)} 
+                    className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
+                >
+                    Apagar Apenas Este
+                </button>
+                {hasFutureMatches && (
+                    <button 
+                        onClick={() => handleConfirmDeletePlanned(true)} 
+                        className="py-2 px-4 rounded-md bg-red-800 text-white hover:bg-red-900"
+                    >
+                        Apagar Este e Futuros
+                    </button>
+                )}
+            </div>
         </div>
       </Modal>
 

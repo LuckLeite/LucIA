@@ -38,6 +38,7 @@ export interface Category {
   iconName: string; // Changed from Component to string for JSON storage
   color: string;
   type: TransactionType;
+  includeInTithing?: boolean; // New field for tithing calculation
 }
 
 export interface Budget {
@@ -45,6 +46,10 @@ export interface Budget {
   categoryId: string;
   limit: number;
   period: 'monthly';
+}
+
+export interface AppSettings {
+  calculateTithing: boolean;
 }
 
 export type Theme = 'light' | 'dark';
