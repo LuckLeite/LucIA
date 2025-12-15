@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings } from '../types';
+import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings, Investment } from '../types';
 import { INITIAL_CATEGORIES } from '../constants';
 
 // Helper to generate IDs
@@ -24,7 +24,8 @@ const STORAGE_KEYS = {
     PLANNED: 'lucia_planned_transactions',
     CARDS: 'lucia_card_transactions',
     CATEGORIES: 'lucia_categories',
-    SETTINGS: 'lucia_settings'
+    SETTINGS: 'lucia_settings',
+    INVESTMENTS: 'lucia_investments'
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -37,6 +38,7 @@ export const useFinanceData = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [plannedTransactions, setPlannedTransactions] = useState<PlannedTransaction[]>([]);
     const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
+    const [investments, setInvestments] = useState<Investment[]>([]);
     const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [loading, setLoading] = useState(true);
@@ -48,12 +50,14 @@ export const useFinanceData = () => {
             const storedTransactions = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
             const storedPlanned = localStorage.getItem(STORAGE_KEYS.PLANNED);
             const storedCards = localStorage.getItem(STORAGE_KEYS.CARDS);
+            const storedInvestments = localStorage.getItem(STORAGE_KEYS.INVESTMENTS);
             const storedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
             const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
 
             if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
             if (storedPlanned) setPlannedTransactions(JSON.parse(storedPlanned));
             if (storedCards) setCardTransactions(JSON.parse(storedCards));
+            if (storedInvestments) setInvestments(JSON.parse(storedInvestments));
             
             if (storedCategories) {
                 const loadedCategories = JSON.parse(storedCategories) as Category[];
@@ -98,6 +102,12 @@ export const useFinanceData = () => {
         const sorted = [...data].sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
         setCardTransactions(sorted);
         localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(sorted));
+    };
+
+    const saveInvestments = (data: Investment[]) => {
+        const sorted = [...data].sort((a, b) => b.amount - a.amount);
+        setInvestments(sorted);
+        localStorage.setItem(STORAGE_KEYS.INVESTMENTS, JSON.stringify(sorted));
     };
 
     const saveCategories = (data: Category[]) => {
@@ -178,26 +188,41 @@ export const useFinanceData = () => {
 
         const monthsSet = new Set<string>();
 
-        // Identify all months present in transactions
+        // Identify all months present in TRANSACTIONS (Realized)
         transactions.forEach(tx => {
              const monthKey = tx.date.slice(0, 7); // YYYY-MM
              monthsSet.add(monthKey);
         });
+        
+        // Identify all months present in PLANNED TRANSACTIONS (Pending)
+        plannedTransactions.forEach(pt => {
+             if (pt.type === 'income' && pt.status === 'pending') {
+                 const monthKey = pt.dueDate.slice(0, 7);
+                 monthsSet.add(monthKey);
+             }
+        });
+
         // Always include current month
         monthsSet.add(new Date().toISOString().slice(0, 7));
 
         monthsSet.forEach(monthKey => {
             let totalValidIncome = 0;
+
+            // A. Sum Realized Income
             transactions.filter(tx => tx.date.startsWith(monthKey) && tx.type === 'income').forEach(tx => {
-                // Determine if category is included in tithing
                 const category = categories.find(c => c.id === tx.categoryId);
-                
-                // If category is found, use its setting. If not found (deleted?), default to false to be safe.
-                // Note: For legacy support, if includeInTithing is undefined, we assume false for known excluded ones or true otherwise?
-                // The loading migration handles the undefined case, so here we just check true.
                 if (category && category.includeInTithing) {
                     totalValidIncome += tx.amount;
                 }
+            });
+
+            // B. Sum Planned Income (Pending only)
+            // We assume if it's paid, it's already in 'transactions'. If it's pending, it's future income.
+            plannedTransactions.filter(pt => pt.dueDate.startsWith(monthKey) && pt.type === 'income' && pt.status === 'pending').forEach(pt => {
+                 const category = categories.find(c => c.id === pt.categoryId);
+                 if (category && category.includeInTithing) {
+                    totalValidIncome += pt.amount;
+                 }
             });
 
             if (totalValidIncome > 0) {
@@ -205,7 +230,7 @@ export const useFinanceData = () => {
             }
         });
         return map;
-    }, [transactions, categories, settings.calculateTithing]);
+    }, [transactions, plannedTransactions, categories, settings.calculateTithing]);
 
     // 2. Sync Effect: Update saved planned transactions if income changed
     // This ensures that even if you edited the date (saving the item), the amount updates if your income updates.
@@ -402,17 +427,12 @@ export const useFinanceData = () => {
     }, [plannedTransactions]);
 
     const updatePlannedTransaction = useCallback(async (updated: PlannedTransaction) => {
-        // If updating a Generated Transaction (like card invoice or automatic tithing),
-        // we essentially "Materialize" it into a real planned transaction by keeping its ID 
-        // to handle the override logic/sync logic.
-        
         const exists = plannedTransactions.some(t => t.id === updated.id);
         
         if (exists) {
             const updatedList = plannedTransactions.map(t => t.id === updated.id ? updated : t);
             savePlanned(updatedList);
         } else {
-            // It was a generated one, now we save it as a real one.
             const materialized: PlannedTransaction = { ...updated, isGenerated: false }; 
             savePlanned([...plannedTransactions, materialized]);
         }
@@ -423,34 +443,24 @@ export const useFinanceData = () => {
             const filtered = plannedTransactions.filter(t => t.id !== id);
             savePlanned(filtered);
         } else {
-            // Find target to know what to match against
             const target = plannedTransactions.find(t => t.id === id);
             if (!target) {
-                 // Fallback if not found (should not happen in UI flow)
                  const filtered = plannedTransactions.filter(t => t.id !== id);
                  savePlanned(filtered);
                  return;
             }
-
-            // Filter out target AND any future transactions that look identical (heuristics)
             const filtered = plannedTransactions.filter(t => {
                 if (t.id === id) return false;
-
-                // Check for match
                 const isSameDescription = t.description === target.description;
                 const isSameCategory = t.categoryId === target.categoryId;
-                const isSameAmount = t.amount === target.amount; // Optional: could be stricter or looser
+                const isSameAmount = t.amount === target.amount; 
                 const isSameType = t.type === target.type;
-                
-                // Only delete if it is AFTER the current target
                 const isFuture = t.dueDate > target.dueDate;
-
                 if (isSameDescription && isSameCategory && isSameAmount && isSameType && isFuture) {
-                    return false; // Remove
+                    return false; 
                 }
-                return true; // Keep
+                return true; 
             });
-            
             savePlanned(filtered);
         }
     }, [plannedTransactions]);
@@ -470,14 +480,6 @@ export const useFinanceData = () => {
         if (planned.categoryId === 'cat_income_movement') {
              updatedPlanned = updatedPlanned.filter(p => p.id !== planned.id);
         } else {
-             // If marked as paid, we update status.
-             // Note: For tithing, even if paid, the sync effect will try to update the amount if income changes.
-             // This is good behavior (if income grows, the liability in the saved record grows, even if marked paid).
-             // But usually once paid, it's done. 
-             // However, for Tithing, often you pay what you owe *at that time*.
-             // If we want to stop updating once paid, we can add a check in the useEffect.
-             // For now, let's allow it to update so user knows the total liability.
-             
              if (!planned.isGenerated) {
                 const updatedPlannedTx: PlannedTransaction = { ...planned, status: 'paid' };
                 updatedPlanned = updatedPlanned.map(t => t.id === planned.id ? updatedPlannedTx : t);
@@ -488,6 +490,22 @@ export const useFinanceData = () => {
         if(updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
 
     }, [plannedTransactions, transactions]);
+
+    // --- Investments ---
+    const addInvestment = useCallback(async (investment: Omit<Investment, 'id'>) => {
+        const newInv: Investment = { ...investment, id: generateUUID() };
+        saveInvestments([...investments, newInv]);
+    }, [investments]);
+
+    const updateInvestment = useCallback(async (updated: Investment) => {
+        const updatedList = investments.map(i => i.id === updated.id ? updated : i);
+        saveInvestments(updatedList);
+    }, [investments]);
+
+    const deleteInvestment = useCallback(async (id: string) => {
+        const filtered = investments.filter(i => i.id !== id);
+        saveInvestments(filtered);
+    }, [investments]);
 
     // --- Category Management ---
 
@@ -552,12 +570,21 @@ export const useFinanceData = () => {
     // --- Backup & Restore ---
     
     const exportData = () => {
+        // Gather UI Preferences that are stored loosely in localStorage
+        const uiPreferences = {
+            theme: localStorage.getItem('theme'),
+            investmentLayout: localStorage.getItem('flux_investment_layout'),
+            investmentShowChart: localStorage.getItem('flux_investment_show_chart')
+        };
+
         const data = {
             transactions,
             plannedTransactions,
             cardTransactions,
+            investments,
             categories,
             settings,
+            uiPreferences, // Include UI preferences in export
             exportDate: new Date().toISOString()
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -577,8 +604,17 @@ export const useFinanceData = () => {
             if(data.transactions) saveTransactions(data.transactions);
             if(data.plannedTransactions) savePlanned(data.plannedTransactions);
             if(data.cardTransactions) saveCards(data.cardTransactions);
+            if(data.investments) saveInvestments(data.investments);
             if(data.categories) saveCategories(data.categories);
             if(data.settings) updateSettings(data.settings);
+            
+            // Restore UI Preferences
+            if (data.uiPreferences) {
+                if (data.uiPreferences.theme) localStorage.setItem('theme', data.uiPreferences.theme);
+                if (data.uiPreferences.investmentLayout) localStorage.setItem('flux_investment_layout', data.uiPreferences.investmentLayout);
+                if (data.uiPreferences.investmentShowChart) localStorage.setItem('flux_investment_show_chart', data.uiPreferences.investmentShowChart);
+            }
+
             return true;
         } catch(e) {
             console.error(e);
@@ -615,6 +651,10 @@ export const useFinanceData = () => {
         addCardTransaction,
         updateCardTransaction,
         deleteCardTransaction,
+        investments,
+        addInvestment,
+        updateInvestment,
+        deleteInvestment,
         addCategory,
         updateCategory,
         deleteCategory,

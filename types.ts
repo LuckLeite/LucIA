@@ -31,6 +31,21 @@ export interface CardTransaction {
   purchaseDate: string; // ISO string format
 }
 
+export type InvestmentType = 'fixed' | 'stock' | 'fund' | 'crypto' | 'other';
+export type IndexerType = 'CDI' | 'IPCA' | 'PRE';
+
+export interface Investment {
+    id: string;
+    name: string;
+    type: InvestmentType;
+    amount: number; // Valor Aportado
+    currentBalance: number; // Saldo Atual
+    startDate: string;
+    liquidity: string; // Ex: D+0, 20/12/2025
+    rateType: IndexerType;
+    rateValue: number; // e.g., 100 (% of CDI), 6 (IPCA + 6%), 12 (12% PRE)
+    categoryId: string; // Optional linkage to category for color/icon
+}
 
 export interface Category {
   id: string;
@@ -54,4 +69,4 @@ export interface AppSettings {
 
 export type Theme = 'light' | 'dark';
 
-export type View = 'dashboard' | 'planned' | 'cards' | 'categories';
+export type View = 'dashboard' | 'planned' | 'cards' | 'categories' | 'investments';

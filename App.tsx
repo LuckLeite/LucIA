@@ -4,7 +4,7 @@ import TransactionList from './components/TransactionList';
 import TransactionForm from './components/TransactionForm';
 import Modal from './components/ui/Modal';
 import { useFinanceData } from './hooks/useFinanceData';
-import type { Theme, Transaction, View, PlannedTransaction, Category, CardTransaction } from './types';
+import type { Theme, Transaction, View, PlannedTransaction, Category, CardTransaction, Investment } from './types';
 import AllTransactionsModal from './components/AllTransactionsModal';
 import PlannedTransactionList from './components/PlannedTransactionList';
 import PlannedTransactionForm from './components/PlannedTransactionForm';
@@ -14,6 +14,9 @@ import CardView from './components/CardView';
 import SettingsModal from './components/SettingsModal';
 import CategoryList from './components/CategoryList';
 import CategoryForm from './components/CategoryForm';
+import InvestmentView from './components/InvestmentView';
+import InvestmentForm from './components/InvestmentForm';
+import FloatingCalculator from './components/FloatingCalculator';
 
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
 const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
@@ -41,12 +44,14 @@ const App: React.FC = () => {
   const [isBulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
   const [isCategoryFormOpen, setCategoryFormOpen] = useState(false);
+  const [isInvestmentFormOpen, setInvestmentFormOpen] = useState(false);
   
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [transactionToDeleteId, setTransactionToDeleteId] = useState<string | null>(null);
   const [idsToDelete, setIdsToDelete] = useState<string[]>([]);
   const [plannedToEdit, setPlannedToEdit] = useState<PlannedTransaction | null>(null);
   const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
+  const [investmentToEdit, setInvestmentToEdit] = useState<Investment | null>(null);
   
   // Planned Deletion States
   const [isPlannedDeleteModalOpen, setPlannedDeleteModalOpen] = useState(false);
@@ -58,6 +63,7 @@ const App: React.FC = () => {
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
     plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
+    investments, addInvestment, updateInvestment, deleteInvestment,
     addCategory, updateCategory, deleteCategory,
     loading, error, totalBalance,
     exportData, importData, clearAllData, settings, updateSettings
@@ -187,6 +193,22 @@ const App: React.FC = () => {
     setCategoryFormOpen(false);
   };
 
+  const handleAddInvestmentClick = () => { setInvestmentToEdit(null); setInvestmentFormOpen(true); };
+  const handleEditInvestmentClick = (inv: Investment) => { setInvestmentToEdit(inv); setInvestmentFormOpen(true); };
+  const handleInvestmentSubmit = (data: Omit<Investment, 'id'> | Investment) => {
+      if ('id' in data) {
+          updateInvestment(data);
+      } else {
+          addInvestment(data);
+      }
+      setInvestmentFormOpen(false);
+  };
+  const handleInvestmentDelete = (id: string) => {
+      if (window.confirm("Deseja apagar este investimento?")) {
+          deleteInvestment(id);
+      }
+  };
+
   const monthlySummary = useMemo(() => getMonthlySummary(displayDate), [getMonthlySummary, displayDate]);
   
   const monthPrefix = useMemo(() => displayDate.toISOString().slice(0, 7), [displayDate]); // "YYYY-MM"
@@ -283,11 +305,12 @@ const App: React.FC = () => {
                 <button onClick={() => setView('dashboard')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Dashboard</button>
                 <button onClick={() => setView('planned')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Planejados</button>
                 <button onClick={() => setView('cards')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Cartões</button>
+                <button onClick={() => setView('investments')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'investments' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Investimentos</button>
                 <button onClick={() => setView('categories')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Categorias</button>
             </nav>
           </div>
           <div className="flex items-center gap-4">
-             {view !== 'cards' && view !== 'categories' && (
+             {view !== 'cards' && view !== 'categories' && view !== 'investments' && (
                 <div className="flex items-center gap-2 text-lg font-semibold">
                     <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mês anterior"><ChevronLeftIcon /></button>
                     <span className="w-32 text-center capitalize text-sm sm:text-base">{displayDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</span>
@@ -300,11 +323,12 @@ const App: React.FC = () => {
           </div>
         </div>
         {/* Mobile Nav */}
-        <div className="md:hidden flex justify-around p-2 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
-             <button onClick={() => setView('dashboard')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Dashboard</button>
-             <button onClick={() => setView('planned')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Planejados</button>
-             <button onClick={() => setView('cards')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Cartões</button>
-             <button onClick={() => setView('categories')} className={`text-xs font-semibold px-2 py-1 rounded-md ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Categorias</button>
+        <div className="md:hidden flex justify-around p-2 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900 overflow-x-auto">
+             <button onClick={() => setView('dashboard')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Dashboard</button>
+             <button onClick={() => setView('planned')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Planejados</button>
+             <button onClick={() => setView('cards')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Cartões</button>
+             <button onClick={() => setView('investments')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'investments' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Investimentos</button>
+             <button onClick={() => setView('categories')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Categorias</button>
         </div>
       </header>
       
@@ -359,6 +383,13 @@ const App: React.FC = () => {
                 onDelete={deleteCardTransaction}
             />
         )}
+        {view === 'investments' && (
+             <InvestmentView 
+                investments={investments}
+                onEdit={handleEditInvestmentClick}
+                onDelete={handleInvestmentDelete}
+             />
+        )}
         {view === 'categories' && (
             <CategoryList 
                 categories={categories}
@@ -372,22 +403,26 @@ const App: React.FC = () => {
           Developed By Lucas Leite 🥛
       </footer>
         
-      {view !== 'cards' && (
+      {/* Floating Action Button for Mobile Add */}
+      {view !== 'cards' && view !== 'categories' && (
         <div className="fixed bottom-6 right-6 z-30">
             <button onClick={() => {
                 if (view === 'dashboard') handleAddTransactionClick();
                 else if (view === 'planned') handleAddPlannedClick();
-                else if (view === 'categories') handleAddCategoryClick();
+                else if (view === 'investments') handleAddInvestmentClick();
             }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span className="hidden sm:inline">
                     {view === 'dashboard' ? 'Nova Transação' : 
                      view === 'planned' ? 'Novo Planejado' :
-                     view === 'categories' ? 'Nova Categoria' : ''}
+                     view === 'investments' ? 'Novo Investimento' : ''}
                 </span>
             </button>
         </div>
       )}
+
+      {/* Persistent Calculator */}
+      <FloatingCalculator />
 
       <SettingsModal 
         isOpen={isSettingsModalOpen} 
@@ -409,6 +444,10 @@ const App: React.FC = () => {
 
       <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
         <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
+      </Modal>
+
+      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}>
+         <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} />
       </Modal>
 
       <ImportModal 
