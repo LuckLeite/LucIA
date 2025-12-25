@@ -41,10 +41,11 @@ const InvestmentTypeChart: React.FC<InvestmentTypeChartProps> = ({ investments }
         }, {} as Record<string, number>);
 
         // Explicitly typing reduce arguments to handle number addition correctly
-        const total = Object.values(grouped).reduce((a: number, b: number) => a + b, 0);
+        // Added 'as number[]' casting to avoid 'unknown' type issues with Object.values in strict environments
+        const total = (Object.values(grouped) as number[]).reduce((a, b) => a + b, 0);
 
-        return Object.entries(grouped)
-            .map(([key, value]: [string, number]) => ({
+        return (Object.entries(grouped) as [string, number][])
+            .map(([key, value]) => ({
                 name: TYPE_LABELS[key] || key,
                 value: value,
                 percent: total > 0 ? (value / total) * 100 : 0

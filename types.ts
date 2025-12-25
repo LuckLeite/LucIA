@@ -45,6 +45,7 @@ export interface Investment {
     rateType: IndexerType;
     rateValue: number; // e.g., 100 (% of CDI), 6 (IPCA + 6%), 12 (12% PRE)
     categoryId: string; // Optional linkage to category for color/icon
+    group?: string; // New field: e.g., "Casal", "Pessoal", "Reserva"
 }
 
 export interface Category {

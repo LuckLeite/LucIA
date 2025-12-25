@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
@@ -25,7 +26,6 @@ const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20
 const ImportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 13V3"/><path d="m8 9 4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/></svg>;
 const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0 2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 
-// Helper function to create a UTC date from a YYYY-MM-DD string
 const parseDateAsUTC = (dateString: string) => {
     const [year, month, day] = dateString.split('-').map(Number);
     return new Date(Date.UTC(year, month - 1, day));
@@ -53,13 +53,12 @@ const App: React.FC = () => {
   const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
   const [investmentToEdit, setInvestmentToEdit] = useState<Investment | null>(null);
   
-  // Planned Deletion States
   const [isPlannedDeleteModalOpen, setPlannedDeleteModalOpen] = useState(false);
   const [plannedDeletionTarget, setPlannedDeletionTarget] = useState<PlannedTransaction | null>(null);
   const [hasFutureMatches, setHasFutureMatches] = useState(false);
 
   const {
-    transactions, categories, addTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
+    transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
     plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
@@ -132,22 +131,12 @@ const App: React.FC = () => {
   const handleEditPlannedClick = (pt: PlannedTransaction) => { setPlannedToEdit(pt); setPlannedFormModalOpen(true); };
   
   const handleRequestDeletePlanned = (id: string) => {
-    // Determine if we are deleting a saved planned transaction or a generated one (which might be just "hiding" it or not applicable)
-    // For generated transactions (isGenerated=true), usually they are not in the main array, but if they are passed here, handle gracefully.
-    
-    // Search in current planned list (which includes saved ones)
     const target = plannedTransactions.find(t => t.id === id);
     if (!target) {
-        // If not in saved list, it might be generated. For generated items, straightforward deletion (hiding) is usually okay,
-        // or effectively they don't persist so "future" deletion doesn't apply the same way.
-        // Let's just pass to standard delete for now.
         deletePlannedTransaction(id);
         return;
     }
-
     setPlannedDeletionTarget(target);
-    
-    // Check if there are future occurrences
     const futures = plannedTransactions.filter(t => 
         t.id !== target.id &&
         t.description === target.description &&
@@ -155,7 +144,6 @@ const App: React.FC = () => {
         t.amount === target.amount &&
         t.dueDate > target.dueDate
     );
-    
     setHasFutureMatches(futures.length > 0);
     setPlannedDeleteModalOpen(true);
   };
@@ -185,95 +173,83 @@ const App: React.FC = () => {
   const handleAddCategoryClick = () => { setCategoryToEdit(null); setCategoryFormOpen(true); };
   const handleEditCategoryClick = (c: Category) => { setCategoryToEdit(c); setCategoryFormOpen(true); };
   const handleCategorySubmit = (data: Omit<Category, 'id'> | Category) => {
-    if ('id' in data) {
-        updateCategory(data);
-    } else {
-        addCategory(data);
-    }
+    if ('id' in data) updateCategory(data);
+    else addCategory(data);
     setCategoryFormOpen(false);
   };
 
   const handleAddInvestmentClick = () => { setInvestmentToEdit(null); setInvestmentFormOpen(true); };
   const handleEditInvestmentClick = (inv: Investment) => { setInvestmentToEdit(inv); setInvestmentFormOpen(true); };
   const handleInvestmentSubmit = (data: Omit<Investment, 'id'> | Investment) => {
-      if ('id' in data) {
-          updateInvestment(data);
-      } else {
-          addInvestment(data);
-      }
+      if ('id' in data) updateInvestment(data);
+      else addInvestment(data);
       setInvestmentFormOpen(false);
   };
-  const handleInvestmentDelete = (id: string) => {
-      if (window.confirm("Deseja apagar este investimento?")) {
-          deleteInvestment(id);
-      }
+  
+  const handleBulkInvestmentUpdate = async (updates: { id: string, currentBalance: number }[]) => {
+     try {
+         for (const update of updates) {
+             const original = investments.find(i => i.id === update.id);
+             if (original) await updateInvestment({ ...original, currentBalance: update.currentBalance });
+         }
+     } catch(e) { console.error(e); }
   };
 
+  const handleInvestmentDelete = (id: string) => {
+      if (window.confirm("Deseja apagar este investimento?")) deleteInvestment(id);
+  };
+
+  const uniqueInvestmentGroups = useMemo(() => {
+    const groups = new Set<string>();
+    investments.forEach(inv => { if (inv.group) groups.add(inv.group); });
+    return Array.from(groups);
+  }, [investments]);
+
   const monthlySummary = useMemo(() => getMonthlySummary(displayDate), [getMonthlySummary, displayDate]);
-  
-  const monthPrefix = useMemo(() => displayDate.toISOString().slice(0, 7), [displayDate]); // "YYYY-MM"
-
+  const monthPrefix = useMemo(() => displayDate.toISOString().slice(0, 7), [displayDate]);
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
-
   const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix)), [plannedTransactions, monthPrefix]);
-  
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
-
   const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
-
   const combinedPlannedTransactions = useMemo(() => 
-    [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing]
-    .sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
+    [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing].sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
   [filteredPlannedTransactions, filteredCardInvoices, filteredTithing]);
 
   const balanceChartData = useMemo(() => {
     const firstDayOfMonth = new Date(Date.UTC(displayDate.getFullYear(), displayDate.getMonth(), 1));
-    
     const balanceAtStartOfMonth = transactions
         .filter(tx => parseDateAsUTC(tx.date) < firstDayOfMonth)
         .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
-        
     const dailyChanges = new Map<number, number>();
-
     filteredTransactions.forEach(tx => {
         const day = parseDateAsUTC(tx.date).getUTCDate();
         const change = tx.type === 'income' ? tx.amount : -tx.amount;
         dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
     });
-    
     combinedPlannedTransactions.filter(pt => pt.status === 'pending').forEach(pt => {
         const day = parseDateAsUTC(pt.dueDate).getUTCDate();
         const change = pt.type === 'income' ? pt.amount : -pt.amount;
         dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
     });
-
     const daysInMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
     const fullChartData: { date: string; balance: number }[] = [];
     let runningBalance = balanceAtStartOfMonth;
-
     for (let day = 1; day <= daysInMonth; day++) {
         runningBalance += dailyChanges.get(day) || 0;
         fullChartData.push({ date: `${String(day).padStart(2, '0')}`, balance: runningBalance });
     }
-
     if (fullChartData.length <= 12) return fullChartData;
-
     const displayData: { date: string; balance: number }[] = [fullChartData[0]];
     const step = Math.floor((fullChartData.length - 2) / 10);
-    for (let i = 1 + step; i < fullChartData.length - 1; i += step) {
-        displayData.push(fullChartData[i]);
-    }
+    for (let i = 1 + step; i < fullChartData.length - 1; i += step) displayData.push(fullChartData[i]);
     displayData.push(fullChartData[fullChartData.length - 1]);
-    
     return displayData;
   }, [transactions, filteredTransactions, combinedPlannedTransactions, displayDate]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
     const categoryMap = new Map<string, Category>(categories.map((c: Category) => [c.id, c]));
-    filteredTransactions
-        .filter(t => t.type === 'expense')
-        .forEach(t => {
+    filteredTransactions.filter(t => t.type === 'expense').forEach(t => {
             const category = categoryMap.get(t.categoryId);
             if (category) {
                 const existing = expenseByCategory.get(category.id) || { name: category.name, value: 0, color: category.color };
@@ -284,16 +260,14 @@ const App: React.FC = () => {
     return Array.from(expenseByCategory.values());
   }, [filteredTransactions, categories]);
 
-  if (loading) {
-    return (
+  if (loading) return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900">
             <svg className="animate-spin h-10 w-10 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
         </div>
-    );
-  }
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 flex flex-col">
@@ -322,7 +296,6 @@ const App: React.FC = () => {
              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mudar tema">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</button>
           </div>
         </div>
-        {/* Mobile Nav */}
         <div className="md:hidden flex justify-around p-2 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900 overflow-x-auto">
              <button onClick={() => setView('dashboard')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Dashboard</button>
              <button onClick={() => setView('planned')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Planejados</button>
@@ -348,13 +321,14 @@ const App: React.FC = () => {
                     monthlyPlannedExpense={monthlySummary.plannedExpense}
                     monthlyPlannedIncome={monthlySummary.plannedIncome}
                     balanceChartData={balanceChartData}
-                    currentBalance={totalBalance}
+                    currentBalance={monthlySummary.income - monthlySummary.expense}
                 />
                 <TransactionList 
                   transactions={filteredTransactions.slice(0, 5)} 
                   categories={categories}
                   onEdit={handleEditTransactionClick}
                   onDelete={handleDeleteTransactionClick}
+                  onDuplicate={duplicateTransaction}
                   onViewAll={() => setAllTransactionsModalOpen(true)}
                 />
                 <div className="p-4 sm:p-6">
@@ -388,22 +362,14 @@ const App: React.FC = () => {
                 investments={investments}
                 onEdit={handleEditInvestmentClick}
                 onDelete={handleInvestmentDelete}
+                onBulkUpdate={handleBulkInvestmentUpdate}
              />
         )}
         {view === 'categories' && (
-            <CategoryList 
-                categories={categories}
-                onEdit={handleEditCategoryClick}
-                onDelete={deleteCategory}
-            />
+            <CategoryList categories={categories} onEdit={handleEditCategoryClick} onDelete={deleteCategory} />
         )}
       </main>
-
-      <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">
-          Developed By Lucas Leite 🥛
-      </footer>
-        
-      {/* Floating Action Button for Mobile Add */}
+      <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">Developed By Lucas Leite 🥛</footer>
       {view !== 'cards' && view !== 'categories' && (
         <div className="fixed bottom-6 right-6 z-30">
             <button onClick={() => {
@@ -413,50 +379,26 @@ const App: React.FC = () => {
             }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span className="hidden sm:inline">
-                    {view === 'dashboard' ? 'Nova Transação' : 
-                     view === 'planned' ? 'Novo Planejado' :
-                     view === 'investments' ? 'Novo Investimento' : ''}
+                    {view === 'dashboard' ? 'Nova Transação' : view === 'planned' ? 'Novo Planejado' : view === 'investments' ? 'Novo Investimento' : ''}
                 </span>
             </button>
         </div>
       )}
-
-      {/* Persistent Calculator */}
       <FloatingCalculator />
-
-      <SettingsModal 
-        isOpen={isSettingsModalOpen} 
-        onClose={() => setSettingsModalOpen(false)}
-        exportData={exportData}
-        importData={importData}
-        clearAllData={clearAllData}
-        settings={settings}
-        updateSettings={updateSettings}
-      />
-
+      <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
       <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}>
         <TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} />
       </Modal>
-
       <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}>
         <PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} />
       </Modal>
-
       <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
         <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
       </Modal>
-
       <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}>
-         <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} />
+         <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} existingGroups={uniqueInvestmentGroups} />
       </Modal>
-
-      <ImportModal 
-        isOpen={isImportModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        onSubmit={handleImportSubmit}
-        categories={categories}
-      />
-
+      <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
       <AllTransactionsModal
         isOpen={isAllTransactionsModalOpen}
         onClose={() => setAllTransactionsModalOpen(false)}
@@ -464,10 +406,10 @@ const App: React.FC = () => {
         categories={categories}
         onEdit={handleEditTransactionClick}
         onDelete={handleDeleteTransactionClick}
+        onDuplicate={duplicateTransaction}
         onDeleteMultiple={handleDeleteMultipleClick}
         onUpdateCategoryMultiple={handleUpdateCategoryMultiple}
       />
-
       <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão">
         <div className="text-gray-700 dark:text-gray-300">
           <p>Deseja realmente apagar esta transação? Esta ação não poderá ser desfeita.</p>
@@ -477,8 +419,6 @@ const App: React.FC = () => {
           </div>
         </div>
       </Modal>
-
-      {/* New Modal for Planned Deletion */}
       <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento">
         <div className="text-gray-700 dark:text-gray-300">
             <p>Você deseja excluir este item planejado?</p>
@@ -488,30 +428,14 @@ const App: React.FC = () => {
                 </div>
             )}
             <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
-                <button 
-                    onClick={() => setPlannedDeleteModalOpen(false)} 
-                    className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600"
-                >
-                    Cancelar
-                </button>
-                <button 
-                    onClick={() => handleConfirmDeletePlanned(false)} 
-                    className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700"
-                >
-                    Apagar Apenas Este
-                </button>
+                <button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600">Cancelar</button>
+                <button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700">Apagar Apenas Este</button>
                 {hasFutureMatches && (
-                    <button 
-                        onClick={() => handleConfirmDeletePlanned(true)} 
-                        className="py-2 px-4 rounded-md bg-red-800 text-white hover:bg-red-900"
-                    >
-                        Apagar Este e Futuros
-                    </button>
+                    <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-4 rounded-md bg-red-800 text-white hover:bg-red-900">Apagar Este e Futuros</button>
                 )}
             </div>
         </div>
       </Modal>
-
        <Modal isOpen={isBulkConfirmOpen} onClose={() => setBulkConfirmOpen(false)} title="Confirmar Exclusão Múltipla">
             <div className="text-gray-700 dark:text-gray-300">
                 <p>Deseja realmente apagar as {idsToDelete.length} transações selecionadas? Esta ação não poderá ser desfeita.</p>

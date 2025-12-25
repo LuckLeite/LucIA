@@ -1,4 +1,5 @@
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -9,8 +10,12 @@ interface State {
   error?: Error;
 }
 
-class ErrorBoundary extends Component<Props, State> {
-  public state: State = { hasError: false };
+// Added constructor to ensure 'props' is correctly initialized and recognized by TypeScript from the base React.Component
+class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
