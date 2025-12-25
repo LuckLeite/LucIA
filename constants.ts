@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Category } from './types';
 
@@ -102,35 +103,37 @@ export const getIconComponent = (iconName: string): React.FC<React.SVGProps<SVGS
   return ICON_MAP[iconName] || MoreHorizontalIcon;
 };
 
-
-export const INITIAL_CATEGORIES: Category[] = [
+// Template de categorias (sem IDs fixos para evitar conflitos multiusuário)
+export const INITIAL_CATEGORIES_TEMPLATE: Omit<Category, 'id'>[] = [
   // Receitas
-  { id: 'cat_income_salary', name: 'Salário', iconName: 'DollarSign', color: '#16a34a', type: 'income', includeInTithing: true },
-  { id: 'cat_income_accounting', name: 'Contabilidade', iconName: 'Receipt', color: '#15803d', type: 'income', includeInTithing: true },
-  { id: 'cat_income_reversal', name: 'Estorno', iconName: 'Undo2', color: '#059669', type: 'income', includeInTithing: false },
-  { id: 'cat_income_others', name: 'Outros', iconName: 'MoreHorizontal', color: '#047857', type: 'income', includeInTithing: true },
-  { id: 'cat_income_cashback', name: 'Cashback', iconName: 'Wallet', color: '#06b6d4', type: 'income', includeInTithing: true },
-  { id: 'cat_income_investment_return', name: 'Retorno de Investimento', iconName: 'TrendingUp', color: '#0891b2', type: 'income', includeInTithing: false },
-  { id: 'cat_income_sales', name: 'Vendas', iconName: 'Tag', color: '#0e7490', type: 'income', includeInTithing: true },
-  { id: 'cat_income_dividends', name: 'Dividendos', iconName: 'Sprout', color: '#155e75', type: 'income', includeInTithing: true },
-  { id: 'cat_income_movement', name: 'Movimento', iconName: 'Repeat', color: '#164e63', type: 'income', includeInTithing: false },
-  { id: 'cat_income_imported', name: 'Importado - Receita', iconName: 'ImportFile', color: '#0d9488', type: 'income', includeInTithing: true },
+  { name: 'Salário', iconName: 'DollarSign', color: '#16a34a', type: 'income', includeInTithing: true },
+  { name: 'Contabilidade', iconName: 'Receipt', color: '#15803d', type: 'income', includeInTithing: true },
+  { name: 'Estorno', iconName: 'Undo2', color: '#059669', type: 'income', includeInTithing: false },
+  { name: 'Outros', iconName: 'MoreHorizontal', color: '#047857', type: 'income', includeInTithing: true },
+  { name: 'Cashback', iconName: 'Wallet', color: '#06b6d4', type: 'income', includeInTithing: true },
+  { name: 'Retorno de Investimento', iconName: 'TrendingUp', color: '#0891b2', type: 'income', includeInTithing: false },
+  { name: 'Vendas', iconName: 'Tag', color: '#0e7490', type: 'income', includeInTithing: true },
+  { name: 'Dividendos', iconName: 'Sprout', color: '#155e75', type: 'income', includeInTithing: true },
+  { name: 'Movimento', iconName: 'Repeat', color: '#164e63', type: 'income', includeInTithing: false },
+  { name: 'Importado - Receita', iconName: 'ImportFile', color: '#0d9488', type: 'income', includeInTithing: true },
 
   // Despesas
-  { id: 'cat_expense_food', name: 'Alimentação', iconName: 'Utensils', color: '#ea580c', type: 'expense' },
-  { id: 'cat_expense_sweets', name: 'Doces', iconName: 'Candy', color: '#d97706', type: 'expense' },
-  { id: 'cat_expense_education', name: 'Educação', iconName: 'BookOpen', color: '#ca8a04', type: 'expense' },
-  { id: 'cat_expense_fun', name: 'Diversão', iconName: 'Clapperboard', color: '#a16207', type: 'expense' },
-  { id: 'cat_expense_clothing', name: 'Vestuário', iconName: 'Shirt', color: '#4d7c0f', type: 'expense' },
-  { id: 'cat_expense_tithing', name: 'Dizimo', iconName: 'Church', color: '#65a30d', type: 'expense' },
-  { id: 'cat_expense_others', name: 'Outros', iconName: 'MoreHorizontal', color: '#84cc16', type: 'expense' },
-  { id: 'cat_expense_pharmacy', name: 'Farmácia', iconName: 'Pill', color: '#be123c', type: 'expense' },
-  { id: 'cat_expense_investment', name: 'Investimento', iconName: 'PiggyBank', color: '#db2777', type: 'expense' },
-  { id: 'cat_expense_card', name: 'Cartão', iconName: 'CreditCard', color: '#9d174d', type: 'expense' },
-  { id: 'cat_expense_gift', name: 'Presente', iconName: 'Gift', color: '#86198f', type: 'expense' },
-  { id: 'cat_expense_transport', name: 'Transporte', iconName: 'Bus', color: '#7e22ce', type: 'expense' },
-  { id: 'cat_expense_necessities', name: 'Necessários', iconName: 'Home', color: '#6d28d9', type: 'expense' },
-  { id: 'cat_expense_wedding', name: 'Casamento', iconName: 'Heart', color: '#5b21b6', type: 'expense' },
-  { id: 'cat_expense_movement', name: 'Movimento', iconName: 'Repeat', color: '#4c1d95', type: 'expense' },
-  { id: 'cat_expense_imported', name: 'Importado - Despesa', iconName: 'ImportFile', color: '#7f1d1d', type: 'expense' },
+  { name: 'Alimentação', iconName: 'Utensils', color: '#ea580c', type: 'expense' },
+  { name: 'Doces', iconName: 'Candy', color: '#d97706', type: 'expense' },
+  { name: 'Educação', iconName: 'BookOpen', color: '#ca8a04', type: 'expense' },
+  { name: 'Diversão', iconName: 'Clapperboard', color: '#a16207', type: 'expense' },
+  { name: 'Vestuário', iconName: 'Shirt', color: '#4d7c0f', type: 'expense' },
+  { name: 'Dizimo', iconName: 'Church', color: '#65a30d', type: 'expense' },
+  { name: 'Outros', iconName: 'MoreHorizontal', color: '#84cc16', type: 'expense' },
+  { name: 'Farmácia', iconName: 'Pill', color: '#be123c', type: 'expense' },
+  { name: 'Investimento', iconName: 'PiggyBank', color: '#db2777', type: 'expense' },
+  { name: 'Cartão', iconName: 'CreditCard', color: '#9d174d', type: 'expense' },
+  { name: 'Presente', iconName: 'Gift', color: '#86198f', type: 'expense' },
+  { name: 'Transporte', iconName: 'Bus', color: '#7e22ce', type: 'expense' },
+  { name: 'Necessários', iconName: 'Home', color: '#6d28d9', type: 'expense' },
+  { name: 'Casamento', iconName: 'Heart', color: '#5b21b6', type: 'expense' },
+  { name: 'Movimento', iconName: 'Repeat', color: '#4c1d95', type: 'expense' },
+  { name: 'Importado - Despesa', iconName: 'ImportFile', color: '#7f1d1d', type: 'expense' },
 ];
+
+export const INITIAL_CATEGORIES = INITIAL_CATEGORIES_TEMPLATE.map((c, i) => ({ ...c, id: `init_${i}` }));

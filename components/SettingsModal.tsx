@@ -6,7 +6,8 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   exportData: () => void;
-  importData: (json: string) => boolean;
+  // Update: allow importData to return a boolean or a Promise<boolean> to match the async implementation in hooks
+  importData: (json: string) => boolean | Promise<boolean>;
   clearAllData: () => void;
   settings: AppSettings;
   updateSettings: (settings: AppSettings) => void;
@@ -25,9 +26,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        // Update: make onload async and await the importData result to correctly handle async imports
+        reader.onload = async (event) => {
             const text = event.target?.result as string;
-            const success = importData(text);
+            const success = await importData(text);
             setImportStatus(success ? 'success' : 'error');
             if(success) {
                  setTimeout(() => {

@@ -1,27 +1,35 @@
--- This script enables access to the tables for anonymous users.
--- Supabase enables Row Level Security (RLS) by default, which means
--- no one can access the data until a policy is created.
 
--- Grant access to 'transactions' table
+-- POLÍTICAS DE SEGURANÇA RESTRITIVAS
+-- Este script garante que um usuário NUNCA veja os dados de outro.
+
+-- 1. Transações
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public access for transactions"
-ON transactions
-FOR ALL
-USING (true)
-WITH CHECK (true);
+DROP POLICY IF EXISTS "Public access for transactions" ON transactions;
+CREATE POLICY "Private access for transactions"
+ON transactions FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
--- Grant access to 'planned_transactions' table
+-- 2. Planejados
 ALTER TABLE planned_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public access for planned transactions"
-ON planned_transactions
-FOR ALL
-USING (true)
-WITH CHECK (true);
+DROP POLICY IF EXISTS "Public access for planned transactions" ON planned_transactions;
+CREATE POLICY "Private access for planned transactions"
+ON planned_transactions FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
--- Grant access to 'card_transactions' table
+-- 3. Cartões
 ALTER TABLE card_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public access for card transactions"
-ON card_transactions
-FOR ALL
-USING (true)
-WITH CHECK (true);
+DROP POLICY IF EXISTS "Public access for card transactions" ON card_transactions;
+CREATE POLICY "Private access for card transactions"
+ON card_transactions FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- 4. Categorias
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access for categories" ON categories;
+CREATE POLICY "Private access for categories"
+ON categories FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);

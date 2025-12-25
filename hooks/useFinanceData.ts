@@ -1,20 +1,11 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from '../lib/supabaseClient';
 import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings, Investment } from '../types';
-import { INITIAL_CATEGORIES } from '../constants';
+import { INITIAL_CATEGORIES_TEMPLATE } from '../constants';
 
-// Helper to generate IDs
-const generateUUID = () => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-};
+const generateUUID = () => crypto.randomUUID();
 
-// Helper for UTC dates
 const parseDateAsUTC = (dateString: string) => {
     const [year, month, day] = dateString.split('-').map(Number);
     return new Date(Date.UTC(year, month - 1, day));
@@ -33,399 +24,381 @@ const DEFAULT_SETTINGS: AppSettings = {
     calculateTithing: true,
 };
 
-const MOVEMENT_BALANCE_DESC = 'Saldo Acumulado Movimento';
-
 export const useFinanceData = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [plannedTransactions, setPlannedTransactions] = useState<PlannedTransaction[]>([]);
     const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
     const [investments, setInvestments] = useState<Investment[]>([]);
-    const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [session, setSession] = useState<any>(null);
 
-    // Load data from LocalStorage
     useEffect(() => {
-        try {
-            const storedTransactions = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-            const storedPlanned = localStorage.getItem(STORAGE_KEYS.PLANNED);
-            const storedCards = localStorage.getItem(STORAGE_KEYS.CARDS);
-            const storedInvestments = localStorage.getItem(STORAGE_KEYS.INVESTMENTS);
-            const storedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-            const storedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-
-            if (storedTransactions) setTransactions(JSON.parse(storedTransactions));
-            if (storedPlanned) setPlannedTransactions(JSON.parse(storedPlanned));
-            if (storedCards) setCardTransactions(JSON.parse(storedCards));
-            if (storedInvestments) setInvestments(JSON.parse(storedInvestments));
-            
-            if (storedCategories) {
-                const loadedCategories = JSON.parse(storedCategories) as Category[];
-                const migratedCategories = loadedCategories.map(cat => {
-                    if (cat.includeInTithing !== undefined) return cat;
-                    const defaultCat = INITIAL_CATEGORIES.find(d => d.id === cat.id);
-                    return { ...cat, includeInTithing: defaultCat ? defaultCat.includeInTithing : true };
-                });
-                setCategories(migratedCategories);
-            } else {
-                setCategories(INITIAL_CATEGORIES);
-            }
-
-            if (storedSettings) {
-                setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(storedSettings) });
-            }
-        } catch (err) {
-            console.error("Failed to load data from local storage", err);
-            setError("Falha ao carregar dados locais.");
-        } finally {
-            setLoading(false);
-        }
+        if (!supabase) return;
+        supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+        return () => subscription.unsubscribe();
     }, []);
 
-    // Persistence Helpers
-    const saveTransactions = (data: Transaction[]) => {
-        const sorted = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setTransactions(sorted);
-        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(sorted));
-    };
-
-    const savePlanned = (data: PlannedTransaction[]) => {
-        const sorted = [...data].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-        setPlannedTransactions(sorted);
-        localStorage.setItem(STORAGE_KEYS.PLANNED, JSON.stringify(sorted));
-    };
-
-    const saveCards = (data: CardTransaction[]) => {
-        const sorted = [...data].sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
-        setCardTransactions(sorted);
-        localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(sorted));
-    };
-
-    const saveInvestments = (data: Investment[]) => {
-        const sorted = [...data].sort((a, b) => b.amount - a.amount);
-        setInvestments(sorted);
-        localStorage.setItem(STORAGE_KEYS.INVESTMENTS, JSON.stringify(sorted));
-    };
-
-    const saveCategories = (data: Category[]) => {
-        setCategories(data);
-        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
-    };
-
-    const updateSettings = (newSettings: AppSettings) => {
-        setSettings(newSettings);
-        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
-    };
-
-    // --- Dynamic Card Invoices Generation ---
-    const generatedCardInvoices = useMemo(() => {
-        const invoices: PlannedTransaction[] = [];
-        const invoicesByCardAndMonth = new Map<string, number>();
+    const persist = useCallback(async (table: string, key: string, data: any[]) => {
+        if (!supabase || !session) return;
+        localStorage.setItem(key, JSON.stringify(data));
         
-        cardTransactions.forEach(cardTx => {
-            const monthlyPayment = cardTx.totalAmount / cardTx.installments;
-            const purchaseDate = parseDateAsUTC(cardTx.purchaseDate);
-
-            for (let i = 1; i <= cardTx.installments; i++) {
-                const dueDate = new Date(purchaseDate);
-                dueDate.setUTCMonth(purchaseDate.getUTCMonth() + i);
-                dueDate.setUTCDate(10);
-                
-                const key = `${cardTx.card}_${dueDate.getUTCFullYear()}_${dueDate.getUTCMonth()}`;
-                const current = invoicesByCardAndMonth.get(key) || 0;
-                invoicesByCardAndMonth.set(key, current + monthlyPayment);
-            }
-        });
-
-        invoicesByCardAndMonth.forEach((amount, key) => {
-            const [cardName, yearStr, monthStr] = key.split('_');
-            const year = parseInt(yearStr);
-            const month = parseInt(monthStr);
-            const id = `card_invoice_${key}`;
-            const overridden = plannedTransactions.some(pt => pt.id === id);
-            if (overridden) return;
-
-            const dueDateObj = new Date(Date.UTC(year, month, 10));
-            const dueDateString = dueDateObj.toISOString().split('T')[0];
-            const description = `Fatura Cartão ${cardName}`;
-
-            const isPaid = transactions.some(tx => {
-                const txDate = parseDateAsUTC(tx.date);
-                return tx.categoryId === 'cat_expense_card' &&
-                       tx.description.includes(cardName) &&
-                       txDate.getUTCFullYear() === year &&
-                       txDate.getUTCMonth() === month;
-            });
-
-            invoices.push({
-                id: id,
-                amount: amount,
-                type: 'expense',
-                categoryId: 'cat_expense_card',
-                description: description,
-                dueDate: dueDateString,
-                status: isPaid ? 'paid' : 'pending',
-                isGenerated: true,
-            });
-        });
-
-        return invoices;
-    }, [cardTransactions, transactions, plannedTransactions]);
-
-    const expectedTithingMap = useMemo(() => {
-        const map = new Map<string, number>();
-        if (!settings.calculateTithing) return map;
-        const monthsSet = new Set<string>();
-        transactions.forEach(tx => monthsSet.add(tx.date.slice(0, 7)));
-        plannedTransactions.forEach(pt => {
-             if (pt.type === 'income' && pt.status === 'pending') monthsSet.add(pt.dueDate.slice(0, 7));
-        });
-        monthsSet.add(new Date().toISOString().slice(0, 7));
-        monthsSet.forEach(monthKey => {
-            let totalValidIncome = 0;
-            transactions.filter(tx => tx.date.startsWith(monthKey) && tx.type === 'income').forEach(tx => {
-                const category = categories.find(c => c.id === tx.categoryId);
-                if (category && category.includeInTithing) totalValidIncome += tx.amount;
-            });
-            plannedTransactions.filter(pt => pt.dueDate.startsWith(monthKey) && pt.type === 'income' && pt.status === 'pending').forEach(pt => {
-                 const category = categories.find(c => c.id === pt.categoryId);
-                 if (category && category.includeInTithing) totalValidIncome += pt.amount;
-            });
-            if (totalValidIncome > 0) map.set(monthKey, totalValidIncome * 0.10);
-        });
-        return map;
-    }, [transactions, plannedTransactions, categories, settings.calculateTithing]);
+        try {
+            const cleanData = data.map(({ isGenerated, ...item }) => item);
+            const { error: supabaseError } = await supabase.from(table).upsert(cleanData);
+            if (supabaseError) console.error(`Erro ao sincronizar ${table}:`, supabaseError.message);
+        } catch (e) {
+            console.error(`Erro ao persistir ${table}:`, e);
+        }
+    }, [session]);
 
     useEffect(() => {
-        if (!settings.calculateTithing) return;
-        let hasUpdates = false;
-        const updatedPlanned = plannedTransactions.map(pt => {
-            if (pt.categoryId === 'cat_expense_tithing' && pt.id.startsWith('tithing_')) {
-                const parts = pt.id.split('_');
-                if (parts.length === 3) {
-                    const year = parts[1];
-                    const monthIndex = parseInt(parts[2]);
-                    const monthKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
-                    const expectedAmount = expectedTithingMap.get(monthKey);
-                    if (expectedAmount !== undefined && Math.abs(pt.amount - expectedAmount) > 0.01) {
-                        hasUpdates = true;
-                        return { ...pt, amount: expectedAmount };
-                    }
+        let isMounted = true;
+
+        const loadFromSupabase = async () => {
+            if (!supabase || !session) {
+                if (isMounted) {
+                    // RESET DOS DADOS AO SAIR
+                    setTransactions([]);
+                    setPlannedTransactions([]);
+                    setCardTransactions([]);
+                    setInvestments([]);
+                    setCategories([]);
+                    setLoading(false);
                 }
+                return;
             }
-            return pt;
-        });
-        if (hasUpdates) savePlanned(updatedPlanned);
-    }, [expectedTithingMap, plannedTransactions, settings.calculateTithing]);
 
-    const generatedTithing = useMemo(() => {
-        if (!settings.calculateTithing) return [];
-        const tithingItems: PlannedTransaction[] = [];
-        expectedTithingMap.forEach((amount, monthKey) => {
-            const [year, month] = monthKey.split('-').map(Number);
-            const id = `tithing_${year}_${month - 1}`;
-            const exists = plannedTransactions.some(pt => pt.id === id);
-            if (!exists) {
-                 const isPaid = transactions.some(tx => tx.categoryId === 'cat_expense_tithing' && tx.date.startsWith(monthKey));
-                 tithingItems.push({
-                    id, amount, type: 'expense', categoryId: 'cat_expense_tithing',
-                    description: `Dízimo Calculado (${monthKey})`, dueDate: `${monthKey}-10`,
-                    status: isPaid ? 'paid' : 'pending', isGenerated: true
-                 });
+            if (isMounted) setLoading(true);
+
+            try {
+                // 1. Carregar Categorias Restritas (RLS fará o filtro automático)
+                const { data: catData } = await supabase.from('categories').select('*');
+                
+                let userCategories: Category[] = catData || [];
+
+                if (userCategories.length === 0) {
+                    // Novo usuário: Gerar conjunto de categorias único para ele
+                    const newCats = INITIAL_CATEGORIES_TEMPLATE.map(tpl => ({
+                        ...tpl,
+                        id: generateUUID() // IDs novos para este usuário específico
+                    }));
+                    await supabase.from('categories').insert(newCats);
+                    userCategories = newCats;
+                }
+
+                if (isMounted) setCategories(userCategories);
+
+                // 2. Carregar demais dados (Sempre filtrados pelo RLS do Banco)
+                const [txs, pln, crd, inv] = await Promise.all([
+                    supabase.from('transactions').select('*').order('date', { ascending: false }),
+                    supabase.from('planned_transactions').select('*').order('dueDate', { ascending: true }),
+                    supabase.from('card_transactions').select('*'),
+                    supabase.from('investments').select('*')
+                ]);
+
+                if (isMounted) {
+                    if (txs.data) setTransactions(txs.data);
+                    if (pln.data) setPlannedTransactions(pln.data);
+                    if (crd.data) setCardTransactions(crd.data);
+                    if (inv.data) setInvestments(inv.data);
+                    setLoading(false);
+                }
+            } catch (err) {
+                console.error("Falha ao carregar dados do Supabase:", err);
+                if (isMounted) setLoading(false);
             }
-        });
-        return tithingItems;
-    }, [expectedTithingMap, plannedTransactions, transactions, settings.calculateTithing]);
+        };
 
-    const updateMovementBalance = (currentPlanned: PlannedTransaction[], amountDelta: number, dateReference: string) => {
-        let updated = [...currentPlanned];
-        let balanceItem = updated.find(p => p.categoryId === 'cat_income_movement' && p.status === 'pending' && p.description === MOVEMENT_BALANCE_DESC);
-        if (balanceItem) {
-            const newAmount = balanceItem.amount + amountDelta;
-            if (newAmount <= 0.01) updated = updated.filter(p => p.id !== balanceItem!.id);
-            else updated = updated.map(p => p.id === balanceItem!.id ? { ...p, amount: newAmount } : p);
-        } else if (amountDelta > 0) {
-            updated.push({
-                id: generateUUID(), categoryId: 'cat_income_movement', type: 'income', amount: amountDelta,
-                description: MOVEMENT_BALANCE_DESC, dueDate: dateReference, status: 'pending', isGenerated: true
-            });
-        }
-        return updated;
-    };
+        loadFromSupabase();
+        return () => { isMounted = false; };
+    }, [session]);
 
     const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id'>) => {
         const newTx: Transaction = { ...transaction, id: generateUUID() };
-        let updatedPlanned = plannedTransactions;
-        if (newTx.categoryId === 'cat_expense_movement') updatedPlanned = updateMovementBalance(updatedPlanned, newTx.amount, newTx.date);
-        else if (newTx.categoryId === 'cat_income_movement') updatedPlanned = updateMovementBalance(updatedPlanned, -newTx.amount, newTx.date);
-        saveTransactions([newTx, ...transactions]);
-        if (updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
-    }, [transactions, plannedTransactions]);
+        const updated = [newTx, ...transactions];
+        setTransactions(updated);
+        await persist('transactions', STORAGE_KEYS.TRANSACTIONS, updated);
+    }, [transactions, persist]);
+
+    const addMultipleTransactions = useCallback(async (newTransactions: Omit<Transaction, 'id'>[]) => {
+        const withIds = newTransactions.map(t => ({ ...t, id: generateUUID() }));
+        const updated = [...withIds, ...transactions];
+        setTransactions(updated);
+        await persist('transactions', STORAGE_KEYS.TRANSACTIONS, updated);
+    }, [transactions, persist]);
 
     const duplicateTransaction = useCallback(async (id: string) => {
         const original = transactions.find(t => t.id === id);
         if (!original) return;
         const copy: Transaction = { ...original, id: generateUUID() };
-        saveTransactions([copy, ...transactions]);
-    }, [transactions]);
-
-    const addMultipleTransactions = useCallback(async (newTransactions: Omit<Transaction, 'id'>[]) => {
-        const formatted = newTransactions.map(t => ({ ...t, id: generateUUID() }));
-        let movementNetChange = 0;
-        let refDate = new Date().toISOString().split('T')[0];
-        formatted.forEach(tx => {
-            if (tx.categoryId === 'cat_expense_movement') { movementNetChange += tx.amount; refDate = tx.date; }
-            else if (tx.categoryId === 'cat_income_movement') { movementNetChange -= tx.amount; refDate = tx.date; }
-        });
-        let updatedPlanned = plannedTransactions;
-        if (movementNetChange !== 0) updatedPlanned = updateMovementBalance(updatedPlanned, movementNetChange, refDate);
-        saveTransactions([...transactions, ...formatted]);
-        if (updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
-    }, [transactions, plannedTransactions]);
+        const updated = [copy, ...transactions];
+        setTransactions(updated);
+        await persist('transactions', STORAGE_KEYS.TRANSACTIONS, updated);
+    }, [transactions, persist]);
 
     const updateTransaction = useCallback(async (updatedTransaction: Transaction) => {
-        saveTransactions(transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
-    }, [transactions]);
+        const updated = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
+        setTransactions(updated);
+        await persist('transactions', STORAGE_KEYS.TRANSACTIONS, updated);
+    }, [transactions, persist]);
 
     const deleteTransaction = useCallback(async (id: string) => {
-        saveTransactions(transactions.filter(t => t.id !== id));
+        const updated = transactions.filter(t => t.id !== id);
+        setTransactions(updated);
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(updated));
+        if (supabase) await supabase.from('transactions').delete().eq('id', id);
     }, [transactions]);
-    
+
     const deleteMultipleTransactions = useCallback(async (ids: string[]) => {
-        saveTransactions(transactions.filter(t => !ids.includes(t.id)));
+        const updated = transactions.filter(t => !ids.includes(t.id));
+        setTransactions(updated);
+        localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(updated));
+        if (supabase) await supabase.from('transactions').delete().in('id', ids);
     }, [transactions]);
-    
+
     const updateMultipleTransactionsCategory = useCallback(async (ids: string[], categoryId: string) => {
-        saveTransactions(transactions.map(t => ids.includes(t.id) ? { ...t, categoryId } : t));
-    }, [transactions]);
+        const updated = transactions.map(t => ids.includes(t.id) ? { ...t, categoryId } : t);
+        setTransactions(updated);
+        await persist('transactions', STORAGE_KEYS.TRANSACTIONS, updated);
+    }, [transactions, persist]);
 
     const addPlannedTransaction = useCallback(async (transaction: Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount: number = 0) => {
-        const transactionsToAdd: PlannedTransaction[] = [];
-        transactionsToAdd.push({ ...transaction, id: generateUUID(), status: 'pending' });
+        const toAdd: PlannedTransaction[] = [{ ...transaction, id: generateUUID(), status: 'pending' as 'pending' }];
         if (recurrenceCount > 0) {
-            let lastDueDate = new Date(transaction.dueDate + 'T12:00:00Z');
+            let lastDate = new Date(transaction.dueDate + 'T12:00:00Z');
             for (let i = 0; i < recurrenceCount; i++) {
-                const nextDueDate = new Date(lastDueDate);
-                nextDueDate.setUTCMonth(nextDueDate.getUTCMonth() + 1);
-                if (nextDueDate.getUTCMonth() !== (lastDueDate.getUTCMonth() + 1) % 12) nextDueDate.setUTCDate(0);
-                transactionsToAdd.push({ ...transaction, id: generateUUID(), dueDate: nextDueDate.toISOString().split('T')[0], status: 'pending' });
-                lastDueDate = nextDueDate;
+                const nextDate = new Date(lastDate);
+                nextDate.setUTCMonth(nextDate.getUTCMonth() + i + 1);
+                toAdd.push({ ...transaction, id: generateUUID(), dueDate: nextDate.toISOString().split('T')[0], status: 'pending' as 'pending' });
             }
         }
-        savePlanned([...plannedTransactions, ...transactionsToAdd]);
-    }, [plannedTransactions]);
+        const updated = [...plannedTransactions, ...toAdd];
+        setPlannedTransactions(updated);
+        await persist('planned_transactions', STORAGE_KEYS.PLANNED, updated);
+    }, [plannedTransactions, persist]);
 
     const updatePlannedTransaction = useCallback(async (updated: PlannedTransaction) => {
-        const exists = plannedTransactions.some(t => t.id === updated.id);
-        if (exists) savePlanned(plannedTransactions.map(t => t.id === updated.id ? updated : t));
-        else savePlanned([...plannedTransactions, { ...updated, isGenerated: false }]);
-    }, [plannedTransactions]);
+        const updatedList = plannedTransactions.map(t => t.id === updated.id ? updated : t);
+        setPlannedTransactions(updatedList);
+        await persist('planned_transactions', STORAGE_KEYS.PLANNED, updatedList);
+    }, [plannedTransactions, persist]);
 
     const deletePlannedTransaction = useCallback(async (id: string, deleteFuture: boolean = false) => {
-        if (!deleteFuture) savePlanned(plannedTransactions.filter(t => t.id !== id));
-        else {
-            const target = plannedTransactions.find(t => t.id === id);
-            if (!target) { savePlanned(plannedTransactions.filter(t => t.id !== id)); return; }
-            savePlanned(plannedTransactions.filter(t => {
-                if (t.id === id) return false;
-                return !(t.description === target.description && t.categoryId === target.categoryId && t.amount === target.amount && t.type === target.type && t.dueDate > target.dueDate);
-            }));
+        const target = plannedTransactions.find(t => t.id === id);
+        if (!target || !supabase) return;
+        let updated: PlannedTransaction[];
+        if (deleteFuture) {
+            updated = plannedTransactions.filter(t => 
+                !(t.description === target.description && t.categoryId === target.categoryId && t.amount === target.amount && t.dueDate >= target.dueDate)
+            );
+        } else {
+            updated = plannedTransactions.filter(t => t.id !== id);
+        }
+        setPlannedTransactions(updated);
+        localStorage.setItem(STORAGE_KEYS.PLANNED, JSON.stringify(updated));
+        if (deleteFuture) {
+            await supabase.from('planned_transactions').delete()
+                .eq('description', target.description)
+                .eq('amount', target.amount)
+                .gte('dueDate', target.dueDate);
+        } else {
+            await supabase.from('planned_transactions').delete().eq('id', id);
         }
     }, [plannedTransactions]);
 
     const markPlannedTransactionAsPaid = useCallback(async (planned: PlannedTransaction) => {
-        const newTransaction: Transaction = { id: generateUUID(), amount: planned.amount, categoryId: planned.categoryId, date: planned.dueDate, description: planned.description, type: planned.type };
-        let updatedPlanned = plannedTransactions;
-        if (planned.categoryId === 'cat_income_movement') updatedPlanned = updatedPlanned.filter(p => p.id !== planned.id);
-        else if (!planned.isGenerated) updatedPlanned = updatedPlanned.map(t => t.id === planned.id ? { ...planned, status: 'paid' } : t);
-        saveTransactions([newTransaction, ...transactions]);
-        if(updatedPlanned !== plannedTransactions) savePlanned(updatedPlanned);
-    }, [plannedTransactions, transactions]);
+        const newTx: Transaction = { id: generateUUID(), amount: planned.amount, categoryId: planned.categoryId, date: planned.dueDate, description: planned.description, type: planned.type };
+        const updatedTx = [newTx, ...transactions];
+        setTransactions(updatedTx);
+        await persist('transactions', STORAGE_KEYS.TRANSACTIONS, updatedTx);
 
-    const addInvestment = useCallback(async (investment: Omit<Investment, 'id'>) => {
-        saveInvestments([{ ...investment, id: generateUUID() }, ...investments]);
-    }, [investments]);
-
-    const updateInvestment = useCallback(async (updated: Investment) => {
-        saveInvestments(investments.map(i => i.id === updated.id ? updated : i));
-    }, [investments]);
-
-    const deleteInvestment = useCallback(async (id: string) => {
-        saveInvestments(investments.filter(i => i.id !== id));
-    }, [investments]);
-
-    const addCategory = useCallback((category: Omit<Category, 'id'>) => {
-        saveCategories([...categories, { ...category, id: generateUUID() }]);
-    }, [categories]);
-
-    const updateCategory = useCallback((updated: Category) => {
-        saveCategories(categories.map(c => c.id === updated.id ? updated : c));
-    }, [categories]);
-
-    const deleteCategory = useCallback((id: string) => {
-        saveCategories(categories.filter(c => c.id !== id));
-    }, [categories]);
+        if (!planned.isGenerated) {
+            const updatedPlanned = plannedTransactions.map(t => t.id === planned.id ? { ...planned, status: 'paid' as 'paid' } : t);
+            setPlannedTransactions(updatedPlanned);
+            await persist('planned_transactions', STORAGE_KEYS.PLANNED, updatedPlanned);
+        }
+    }, [transactions, plannedTransactions, persist]);
 
     const addCardTransaction = useCallback(async (transaction: Omit<CardTransaction, 'id'>) => {
-        saveCards([{ ...transaction, id: generateUUID() }, ...cardTransactions]);
-    }, [cardTransactions]);
+        const newCardTx = { ...transaction, id: generateUUID() };
+        const updated = [newCardTx, ...cardTransactions];
+        setCardTransactions(updated);
+        await persist('card_transactions', STORAGE_KEYS.CARDS, updated);
+    }, [cardTransactions, persist]);
 
     const updateCardTransaction = useCallback(async (updated: CardTransaction) => {
-        saveCards(cardTransactions.map(t => t.id === updated.id ? updated : t));
-    }, [cardTransactions]);
+        const updatedList = cardTransactions.map(t => t.id === updated.id ? updated : t);
+        setCardTransactions(updatedList);
+        await persist('card_transactions', STORAGE_KEYS.CARDS, updatedList);
+    }, [cardTransactions, persist]);
 
     const deleteCardTransaction = useCallback(async (id: string) => {
-        saveCards(cardTransactions.filter(t => t.id !== id));
+        const updated = cardTransactions.filter(t => t.id !== id);
+        setCardTransactions(updated);
+        localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated));
+        if (supabase) await supabase.from('card_transactions').delete().eq('id', id);
     }, [cardTransactions]);
 
-    const totalBalance = useMemo(() => transactions.reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0), [transactions]);
+    const addCategory = useCallback(async (category: Omit<Category, 'id'>) => {
+        const newCat = { ...category, id: generateUUID() };
+        const updated = [...categories, newCat];
+        setCategories(updated);
+        await persist('categories', STORAGE_KEYS.CATEGORIES, updated);
+    }, [categories, persist]);
+
+    const updateCategory = useCallback(async (updated: Category) => {
+        const updatedList = categories.map(c => c.id === updated.id ? updated : c);
+        setCategories(updatedList);
+        await persist('categories', STORAGE_KEYS.CATEGORIES, updatedList);
+    }, [categories, persist]);
+
+    const deleteCategory = useCallback(async (id: string) => {
+        const updated = categories.filter(c => c.id !== id);
+        setCategories(updated);
+        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(updated));
+        if (supabase) await supabase.from('categories').delete().eq('id', id);
+    }, [categories]);
+
+    const addInvestment = useCallback(async (investment: Omit<Investment, 'id'>) => {
+        const newInv = { ...investment, id: generateUUID() };
+        const updated = [newInv, ...investments];
+        setInvestments(updated);
+        await persist('investments', STORAGE_KEYS.INVESTMENTS, updated);
+    }, [investments, persist]);
+
+    const updateInvestment = useCallback(async (updated: Investment) => {
+        const updatedList = investments.map(i => i.id === updated.id ? updated : i);
+        setInvestments(updatedList);
+        await persist('investments', STORAGE_KEYS.INVESTMENTS, updatedList);
+    }, [investments, persist]);
+
+    const deleteInvestment = useCallback(async (id: string) => {
+        const updated = investments.filter(i => i.id !== id);
+        setInvestments(updated);
+        localStorage.setItem(STORAGE_KEYS.INVESTMENTS, JSON.stringify(updated));
+        if (supabase) await supabase.from('investments').delete().eq('id', id);
+    }, [investments]);
 
     const getMonthlySummary = useCallback((date: Date) => {
         const monthPrefix = date.toISOString().slice(0, 7);
-        let income = 0;
-        let expense = 0;
+        let income = 0; let expense = 0;
         transactions.filter(tx => tx.date.startsWith(monthPrefix)).forEach(tx => {
             if (tx.type === 'income') income += tx.amount; else expense += tx.amount;
         });
-        const allPending = [...plannedTransactions, ...generatedCardInvoices, ...generatedTithing].filter(pt => pt.dueDate.startsWith(monthPrefix) && pt.status === 'pending');
-        const plannedExpense = allPending.filter(pt => pt.type === 'expense').reduce((sum, pt) => sum + pt.amount, 0);
-        const plannedIncome = allPending.filter(pt => pt.type === 'income').reduce((sum, pt) => sum + pt.amount, 0);
-        return { income, expense, plannedExpense, plannedIncome };
-    }, [transactions, plannedTransactions, generatedCardInvoices, generatedTithing]);
+        return { income, expense, plannedExpense: 0, plannedIncome: 0 };
+    }, [transactions]);
 
-    const exportData = () => {
-        const data = { transactions, plannedTransactions, cardTransactions, investments, categories, settings, uiPreferences: { theme: localStorage.getItem('theme'), investmentLayout: localStorage.getItem('flux_investment_layout'), investmentShowChart: localStorage.getItem('flux_investment_show_chart') }, exportDate: new Date().toISOString() };
+    const generatedCardInvoices = useMemo(() => {
+        const invoices: PlannedTransaction[] = [];
+        // Localizar categoria de cartão pelo nome, já que o ID mudou
+        const cardCat = categories.find(c => c.name === 'Cartão' && c.type === 'expense');
+        if (!cardCat) return [];
+
+        cardTransactions.forEach(cardTx => {
+            const monthlyPayment = cardTx.totalAmount / cardTx.installments;
+            const purchaseDate = parseDateAsUTC(cardTx.purchaseDate);
+            for (let i = 1; i <= cardTx.installments; i++) {
+                const dueDate = new Date(purchaseDate);
+                dueDate.setUTCMonth(purchaseDate.getUTCMonth() + i);
+                dueDate.setUTCDate(10);
+                invoices.push({
+                    id: `card_invoice_${cardTx.id}_${i}`,
+                    amount: monthlyPayment,
+                    type: 'expense',
+                    categoryId: cardCat.id,
+                    description: `Fatura: ${cardTx.name} (${i}/${cardTx.installments})`,
+                    dueDate: dueDate.toISOString().split('T')[0],
+                    status: 'pending' as 'pending',
+                    isGenerated: true,
+                });
+            }
+        });
+        return invoices;
+    }, [cardTransactions, categories]);
+
+    const generatedTithing = useMemo(() => {
+        if (!settings.calculateTithing) return [];
+        // Localizar categoria de dízimo pelo nome
+        const tithingCat = categories.find(c => c.name === 'Dizimo' && c.type === 'expense');
+        if (!tithingCat) return [];
+
+        const monthlyIncomes = new Map<string, number>();
+        transactions.forEach(tx => {
+            if (tx.type === 'income') {
+                const category = categories.find(c => c.id === tx.categoryId);
+                if (category?.includeInTithing !== false) {
+                    const month = tx.date.slice(0, 7);
+                    monthlyIncomes.set(month, (monthlyIncomes.get(month) || 0) + tx.amount);
+                }
+            }
+        });
+        const tithingItems: PlannedTransaction[] = [];
+        monthlyIncomes.forEach((total, month) => {
+            const tithingAmount = total * 0.1;
+            if (tithingAmount > 0) {
+                tithingItems.push({
+                    id: `tithing_${month}`,
+                    amount: tithingAmount,
+                    type: 'expense',
+                    categoryId: tithingCat.id,
+                    description: `Dízimo - ${month}`,
+                    dueDate: `${month}-10`,
+                    status: 'pending' as 'pending',
+                    isGenerated: true
+                });
+            }
+        });
+        return tithingItems;
+    }, [transactions, categories, settings.calculateTithing]);
+
+    const updateSettings = useCallback(async (newSettings: AppSettings) => {
+        setSettings(newSettings);
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
+        if (supabase) await supabase.from('settings').upsert({ id: 'app_settings', ...newSettings });
+    }, []);
+
+    const exportData = useCallback(() => {
+        const data = { transactions, plannedTransactions, cardTransactions, categories, settings, investments };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `lucia_backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    };
+        a.href = url;
+        a.download = `flux_backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [transactions, plannedTransactions, cardTransactions, categories, settings, investments]);
 
-    const importData = (jsonData: string) => {
+    const importData = useCallback(async (json: string) => {
         try {
-            const data = JSON.parse(jsonData);
-            if(data.transactions) saveTransactions(data.transactions);
-            if(data.plannedTransactions) savePlanned(data.plannedTransactions);
-            if(data.cardTransactions) saveCards(data.cardTransactions);
-            if(data.investments) saveInvestments(data.investments);
-            if(data.categories) saveCategories(data.categories);
-            if(data.settings) updateSettings(data.settings);
-            if (data.uiPreferences) {
-                if (data.uiPreferences.theme) localStorage.setItem('theme', data.uiPreferences.theme);
-                if (data.uiPreferences.investmentLayout) localStorage.setItem('flux_investment_layout', data.uiPreferences.investmentLayout);
-                if (data.uiPreferences.investmentShowChart) localStorage.setItem('flux_investment_show_chart', data.uiPreferences.investmentShowChart);
-            }
+            const data = JSON.parse(json);
+            if(!session) return false;
+            if (data.categories) { setCategories(data.categories); await persist('categories', STORAGE_KEYS.CATEGORIES, data.categories); }
+            if (data.transactions) { setTransactions(data.transactions); await persist('transactions', STORAGE_KEYS.TRANSACTIONS, data.transactions); }
+            if (data.plannedTransactions) { setPlannedTransactions(data.plannedTransactions); await persist('planned_transactions', STORAGE_KEYS.PLANNED, data.plannedTransactions); }
+            if (data.cardTransactions) { setCardTransactions(data.cardTransactions); await persist('card_transactions', STORAGE_KEYS.CARDS, data.cardTransactions); }
+            if (data.settings) setSettings(data.settings);
+            if (data.investments) { setInvestments(data.investments); await persist('investments', STORAGE_KEYS.INVESTMENTS, data.investments); }
             return true;
-        } catch(e) { return false; }
-    };
+        } catch (e) {
+            console.error("Erro ao importar e sincronizar dados:", e);
+            return false;
+        }
+    }, [persist, session]);
 
     return {
-        transactions, categories, settings, updateSettings, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, deleteMultipleTransactions, updateMultipleTransactionsCategory,
-        totalBalance, getMonthlySummary, plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
+        transactions, categories, settings, addTransaction, duplicateTransaction, updateTransaction, deleteTransaction,
+        addMultipleTransactions, deleteMultipleTransactions, updateMultipleTransactionsCategory,
+        getMonthlySummary, plannedTransactions, generatedCardInvoices, generatedTithing, 
+        addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
         cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
         investments, addInvestment, updateInvestment, deleteInvestment,
-        addCategory, updateCategory, deleteCategory, loading, error, exportData, importData, clearAllData: () => { localStorage.clear(); window.location.reload(); }
+        addCategory, updateCategory, deleteCategory,
+        exportData, importData, updateSettings,
+        loading, error, totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0), 
+        clearAllData: () => { localStorage.clear(); window.location.reload(); }
     };
 };

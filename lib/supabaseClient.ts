@@ -1,6 +1,19 @@
-// This file is no longer used as the application has moved to local storage.
-// It is kept as a placeholder to prevent import errors during the transition, but all logic has been removed.
 
-export const supabase = null;
-export const supabaseUrl = '';
-export const supabaseAnonKey = '';
+import { createClient } from '@supabase/supabase-js';
+
+// Usando as credenciais exatas fornecidas:
+const supabaseUrl = 'https://jwkfrmlsibkqhanwkzyb.supabase.co'; 
+const supabaseAnonKey = 'sb_publishable_kuH2Ut3jSPe6uJKTMR3xcQ_rO_nWhW1';
+
+const isValidUrl = (url: string) => {
+    try {
+        return url && url.startsWith('http') && !url.includes('SUA_SUPABASE_URL');
+    } catch {
+        return false;
+    }
+};
+
+// Inicialização do cliente Supabase
+export const supabase = isValidUrl(supabaseUrl) 
+    ? createClient(supabaseUrl, supabaseAnonKey) 
+    : null;

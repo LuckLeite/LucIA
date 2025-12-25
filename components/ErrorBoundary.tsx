@@ -10,12 +10,11 @@ interface State {
   error?: Error;
 }
 
-// Added constructor to ensure 'props' is correctly initialized and recognized by TypeScript from the base React.Component
+// Fixed TypeScript errors in ErrorBoundary: explicitly using React.Component to ensure props and state are correctly inherited.
 class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false };
-  }
+  public state: State = {
+    hasError: false
+  };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };

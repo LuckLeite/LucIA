@@ -1,64 +1,113 @@
 
--- Create the transactions table
-CREATE TABLE transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  amount REAL NOT NULL,
+-- Script de Criação do Banco de Dados Flux (Protegido)
+-- Rode isso no SQL Editor do Supabase
+
+-- 1. Tabela de Categorias
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  name TEXT NOT NULL,
+  iconName TEXT NOT NULL,
+  color TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-  category_id TEXT NOT NULL,
+  includeInTithing BOOLEAN DEFAULT true,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 2. Tabela de Transações
+CREATE TABLE IF NOT EXISTS transactions (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  amount NUMERIC NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+  categoryId TEXT REFERENCES categories(id),
   date DATE NOT NULL,
   description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Create the planned_transactions table
-CREATE TABLE planned_transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  amount REAL NOT NULL,
+-- 3. Tabela de Transações Planejadas
+CREATE TABLE IF NOT EXISTS planned_transactions (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  amount NUMERIC NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-  category_id TEXT NOT NULL,
+  categoryId TEXT REFERENCES categories(id),
   description TEXT,
-  due_date DATE NOT NULL,
+  dueDate DATE NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('pending', 'paid')),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  isGenerated BOOLEAN DEFAULT false,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Create the card_transactions table
-CREATE TABLE card_transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- 4. Tabela de Cartões (Compras Parceladas)
+CREATE TABLE IF NOT EXISTS card_transactions (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
   name TEXT NOT NULL,
   card TEXT NOT NULL,
-  total_amount REAL NOT NULL,
+  totalAmount NUMERIC NOT NULL,
   installments INTEGER NOT NULL,
-  purchase_date DATE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  purchaseDate DATE NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Enable Row Level Security (RLS) for all tables
+-- 5. Tabela de Investimentos
+CREATE TABLE IF NOT EXISTS investments (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  currentBalance NUMERIC NOT NULL,
+  startDate DATE NOT NULL,
+  liquidity TEXT,
+  rateType TEXT,
+  rateValue NUMERIC,
+  categoryId TEXT,
+  "group" TEXT DEFAULT 'Geral',
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 6. Tabela de Configurações
+CREATE TABLE IF NOT EXISTS settings (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  calculateTithing BOOLEAN DEFAULT true,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Habilitar Row Level Security (RLS)
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE planned_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE card_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
--- Create policies to allow public access (for anonymous users)
--- This is suitable for a simple, single-user setup where the data is protected by the obscurity of the URL and anon key.
--- For multi-user apps, you would create policies based on user IDs (e.g., using auth.uid()).
+-- POLÍTICAS DE SEGURANÇA (O CORAÇÃO DO MULTI-USUÁRIO)
+-- Removemos o "USING (true)" e usamos "auth.uid() = user_id"
 
--- Policy for transactions
-CREATE POLICY "Public access for transactions"
-ON transactions
-FOR ALL
-USING (true)
-WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can only access their own categories" ON categories;
+CREATE POLICY "Users can only access their own categories" ON categories
+FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- Policy for planned_transactions
-CREATE POLICY "Public access for planned transactions"
-ON planned_transactions
-FOR ALL
-USING (true)
-WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can only access their own transactions" ON transactions;
+CREATE POLICY "Users can only access their own transactions" ON transactions
+FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- Policy for card_transactions
-CREATE POLICY "Public access for card transactions"
-ON card_transactions
-FOR ALL
-USING (true)
-WITH CHECK (true);
+DROP POLICY IF EXISTS "Users can only access their own planned_transactions" ON planned_transactions;
+CREATE POLICY "Users can only access their own planned_transactions" ON planned_transactions
+FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own card_transactions" ON card_transactions;
+CREATE POLICY "Users can only access their own card_transactions" ON card_transactions
+FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own investments" ON investments;
+CREATE POLICY "Users can only access their own investments" ON investments
+FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own settings" ON settings;
+CREATE POLICY "Users can only access their own settings" ON settings
+FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
 import TransactionForm from './components/TransactionForm';
 import Modal from './components/ui/Modal';
 import { useFinanceData } from './hooks/useFinanceData';
+import { supabase } from './lib/supabaseClient';
+import Auth from './components/Auth';
 import type { Theme, Transaction, View, PlannedTransaction, Category, CardTransaction, Investment } from './types';
 import AllTransactionsModal from './components/AllTransactionsModal';
 import PlannedTransactionList from './components/PlannedTransactionList';
@@ -25,6 +27,7 @@ const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20"
 const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 const ImportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 13V3"/><path d="m8 9 4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/></svg>;
 const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0 2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+const LogoutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const parseDateAsUTC = (dateString: string) => {
     const [year, month, day] = dateString.split('-').map(Number);
@@ -32,6 +35,7 @@ const parseDateAsUTC = (dateString: string) => {
 };
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>((localStorage.getItem('theme') as Theme) || 'dark');
   const [view, setView] = useState<View>('dashboard');
   const [displayDate, setDisplayDate] = useState(new Date());
@@ -56,6 +60,41 @@ const App: React.FC = () => {
   const [isPlannedDeleteModalOpen, setPlannedDeleteModalOpen] = useState(false);
   const [plannedDeletionTarget, setPlannedDeletionTarget] = useState<PlannedTransaction | null>(null);
   const [hasFutureMatches, setHasFutureMatches] = useState(false);
+
+  // Monitorar Autenticação
+  useEffect(() => {
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+        // Limpar cache local para não vazar nada na interface antes do redirect
+        localStorage.removeItem('lucia_transactions');
+        localStorage.removeItem('lucia_planned_transactions');
+        localStorage.removeItem('lucia_card_transactions');
+        localStorage.removeItem('lucia_categories');
+        localStorage.removeItem('lucia_investments');
+        // O estado session será atualizado automaticamente pelo listener onAuthStateChange
+        setSession(null); 
+      } catch (e) {
+        console.error("Erro ao sair:", e);
+        // Fallback caso o signOut falhe
+        window.location.reload();
+      }
+    }
+  };
 
   const {
     transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
@@ -94,7 +133,7 @@ const App: React.FC = () => {
 
   const handleFormSubmit = async (data: Omit<Transaction, 'id'> | Transaction) => {
     try {
-      'id' in data ? await updateTransaction(data) : await addTransaction(data);
+      'id' in data ? await updateTransaction(data as Transaction) : await addTransaction(data);
       setFormModalOpen(false);
     } catch(e) { console.error(e) }
   };
@@ -173,7 +212,7 @@ const App: React.FC = () => {
   const handleAddCategoryClick = () => { setCategoryToEdit(null); setCategoryFormOpen(true); };
   const handleEditCategoryClick = (c: Category) => { setCategoryToEdit(c); setCategoryFormOpen(true); };
   const handleCategorySubmit = (data: Omit<Category, 'id'> | Category) => {
-    if ('id' in data) updateCategory(data);
+    if ('id' in data) updateCategory(data as Category);
     else addCategory(data);
     setCategoryFormOpen(false);
   };
@@ -181,7 +220,7 @@ const App: React.FC = () => {
   const handleAddInvestmentClick = () => { setInvestmentToEdit(null); setInvestmentFormOpen(true); };
   const handleEditInvestmentClick = (inv: Investment) => { setInvestmentToEdit(inv); setInvestmentFormOpen(true); };
   const handleInvestmentSubmit = (data: Omit<Investment, 'id'> | Investment) => {
-      if ('id' in data) updateInvestment(data);
+      if ('id' in data) updateInvestment(data as Investment);
       else addInvestment(data);
       setInvestmentFormOpen(false);
   };
@@ -208,6 +247,14 @@ const App: React.FC = () => {
   const monthlySummary = useMemo(() => getMonthlySummary(displayDate), [getMonthlySummary, displayDate]);
   const monthPrefix = useMemo(() => displayDate.toISOString().slice(0, 7), [displayDate]);
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
+  
+  const accumulatedBalanceAtSelectedMonth = useMemo(() => {
+    const lastDayOfMonth = new Date(Date.UTC(displayDate.getUTCFullYear(), displayDate.getUTCMonth() + 1, 0, 23, 59, 59));
+    return transactions
+        .filter(tx => parseDateAsUTC(tx.date) <= lastDayOfMonth)
+        .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0);
+  }, [transactions, displayDate]);
+
   const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix)), [plannedTransactions, monthPrefix]);
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
   const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
@@ -260,6 +307,8 @@ const App: React.FC = () => {
     return Array.from(expenseByCategory.values());
   }, [filteredTransactions, categories]);
 
+  if (!session) return <Auth />;
+
   if (loading) return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900">
             <svg className="animate-spin h-10 w-10 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -294,6 +343,7 @@ const App: React.FC = () => {
              <button onClick={() => setImportModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Importar Extrato"><ImportIcon /></button>
              <button onClick={() => setSettingsModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Configurações"><SettingsIcon /></button>
              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mudar tema">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</button>
+             <button onClick={handleLogout} className="p-2 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Sair"><LogoutIcon /></button>
           </div>
         </div>
         <div className="md:hidden flex justify-around p-2 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900 overflow-x-auto">
@@ -321,7 +371,7 @@ const App: React.FC = () => {
                     monthlyPlannedExpense={monthlySummary.plannedExpense}
                     monthlyPlannedIncome={monthlySummary.plannedIncome}
                     balanceChartData={balanceChartData}
-                    currentBalance={monthlySummary.income - monthlySummary.expense}
+                    currentBalance={accumulatedBalanceAtSelectedMonth}
                 />
                 <TransactionList 
                   transactions={filteredTransactions.slice(0, 5)} 
