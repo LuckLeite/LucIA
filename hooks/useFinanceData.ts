@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings, Investment, Budget } from '../types';
@@ -64,7 +65,7 @@ export const useFinanceData = () => {
                 supabase.from('budgets').select('*')
             ]);
 
-            // SEED: Se o usuário não tem categorias, criamos as básicas
+            // SEED AUTOMÁTICO PARA NOVOS USUÁRIOS
             if (cat.data && cat.data.length === 0) {
                 const seedCategories = INITIAL_CATEGORIES_TEMPLATE.map(c => ({
                     ...c,
@@ -87,7 +88,7 @@ export const useFinanceData = () => {
             setLoading(false);
         } catch (err: any) {
             console.error("Erro ao carregar dados:", err);
-            setError("Não foi possível carregar os dados do servidor.");
+            setError("Não foi possível carregar os dados.");
             setLoading(false);
         }
     }, [session]);
@@ -102,8 +103,6 @@ export const useFinanceData = () => {
         const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
         const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
         
-        // Planejamento pendente (manual + gerado)
-        // Note: as funções useMemo de geração já cuidam do resto
         const monthPlannedManual = plannedTransactions.filter(t => t.dueDate.startsWith(monthPrefix) && t.status === 'pending');
         const plannedIncome = monthPlannedManual.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
         const plannedExpense = monthPlannedManual.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
@@ -187,8 +186,11 @@ export const useFinanceData = () => {
 
     const generatedTithing = useMemo(() => {
         if (!settings.calculateTithing || categories.length === 0) return [];
-        // Busca insensível a caixa
-        const tithingCat = categories.find(c => c.name.toLowerCase() === 'dizimo' && c.type === 'expense');
+        
+        const tithingCat = categories.find(c => 
+            (c.name.toLowerCase().includes('dizimo') || c.name.toLowerCase().includes('dízimo')) && 
+            c.type === 'expense'
+        );
         if (!tithingCat) return [];
 
         const monthlyIncome = new Map<string, number>();
@@ -223,7 +225,10 @@ export const useFinanceData = () => {
 
     const generatedCardInvoices = useMemo(() => {
         if (categories.length === 0) return [];
-        const cardCat = categories.find(c => c.name.toLowerCase() === 'cartão' && c.type === 'expense');
+        const cardCat = categories.find(c => 
+            (c.name.toLowerCase().includes('cartao') || c.name.toLowerCase().includes('cartão')) && 
+            c.type === 'expense'
+        );
         if (!cardCat) return [];
         
         const cardMonthlySum = new Map<string, number>();
@@ -265,7 +270,6 @@ export const useFinanceData = () => {
 
     return {
         transactions, categories, budgets, plannedTransactions, cardTransactions, investments, settings, loading, error,
-        // Fix: Expose getMonthlySummary so it can be accessed in App.tsx
         getMonthlySummary,
         addTransaction, updateTransaction, deleteTransaction, 
         addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
@@ -302,10 +306,11 @@ export const useFinanceData = () => {
         totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0),
         updateSettings: (s: AppSettings) => setSettings(s),
         addMultipleTransactions: async (txs: Omit<Transaction, 'id'>[]) => {
-            const newTxs = txs.map(t => ({ ...t, id: generateUUID(), user_id: session?.user?.id }));
+            const newTxs = txs.map(t => ({ ...t, id: generateUUID() }));
             setTransactions(prev => [...newTxs, ...prev]);
             if (supabase && session) {
-                await supabase.from('transactions').upsert(newTxs);
+                const dataWithUid = newTxs.map(t => ({ ...t, user_id: session.user.id }));
+                await supabase.from('transactions').upsert(dataWithUid);
             }
         },
         deleteMultipleTransactions: async (ids: string[]) => {

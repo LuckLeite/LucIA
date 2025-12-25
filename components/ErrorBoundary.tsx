@@ -1,4 +1,5 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -9,14 +10,13 @@ interface State {
   error?: Error;
 }
 
-// Fix: Explicitly extend React.Component to resolve issues where the compiler fails to recognize 'state' and 'props' properties.
+// Fix: Correctly extend React.Component with Props and State and initialize state as a property
+// to ensure TypeScript recognizes 'state' and 'props' on the class instance, resolving errors
+// where 'state' or 'props' were reported as missing on the ErrorBoundary type.
 class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false
-    };
-  }
+  public state: State = {
+    hasError: false
+  };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -27,6 +27,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public render() {
+    // Accessing inherited state property correctly after proper class extension.
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 p-4">
@@ -58,6 +59,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // Accessing inherited props property correctly after proper class extension.
     return this.props.children;
   }
 }

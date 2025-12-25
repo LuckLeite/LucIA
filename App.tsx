@@ -61,7 +61,6 @@ const App: React.FC = () => {
   const [plannedDeletionTarget, setPlannedDeletionTarget] = useState<PlannedTransaction | null>(null);
   const [hasFutureMatches, setHasFutureMatches] = useState(false);
 
-  // Monitorar Autenticação
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -185,7 +184,7 @@ const App: React.FC = () => {
   const handleAddCategoryClick = (type: 'income' | 'expense') => {
       const currentCount = categories.filter(c => c.type === type).length;
       if (currentCount >= 20) {
-          alert(`Você atingiu o limite de 20 categorias de ${type === 'income' ? 'receita' : 'despesa'}.`);
+          alert(`Limite de 20 categorias de ${type === 'income' ? 'receita' : 'despesa'} atingido.`);
           return;
       }
       setCategoryToEdit(null);
@@ -302,7 +301,9 @@ const App: React.FC = () => {
   );
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) {
+        await supabase.auth.signOut();
+    }
     setSession(null);
     window.location.reload();
   };
