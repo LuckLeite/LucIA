@@ -69,7 +69,17 @@ CREATE TABLE IF NOT EXISTS investments (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 6. Tabela de Configurações
+-- 6. Tabela de Orçamentos (Budgets)
+CREATE TABLE IF NOT EXISTS budgets (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  categoryId TEXT REFERENCES categories(id),
+  "limit" NUMERIC NOT NULL,
+  period TEXT DEFAULT 'monthly',
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 7. Tabela de Configurações
 CREATE TABLE IF NOT EXISTS settings (
   id TEXT PRIMARY KEY,
   user_id UUID DEFAULT auth.uid(),
@@ -83,31 +93,27 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE planned_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE card_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
--- POLÍTICAS DE SEGURANÇA (O CORAÇÃO DO MULTI-USUÁRIO)
--- Removemos o "USING (true)" e usamos "auth.uid() = user_id"
-
+-- POLÍTICAS DE SEGURANÇA
 DROP POLICY IF EXISTS "Users can only access their own categories" ON categories;
-CREATE POLICY "Users can only access their own categories" ON categories
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can only access their own categories" ON categories FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can only access their own transactions" ON transactions;
-CREATE POLICY "Users can only access their own transactions" ON transactions
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can only access their own transactions" ON transactions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can only access their own planned_transactions" ON planned_transactions;
-CREATE POLICY "Users can only access their own planned_transactions" ON planned_transactions
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can only access their own planned_transactions" ON planned_transactions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can only access their own card_transactions" ON card_transactions;
-CREATE POLICY "Users can only access their own card_transactions" ON card_transactions
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can only access their own card_transactions" ON card_transactions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can only access their own investments" ON investments;
-CREATE POLICY "Users can only access their own investments" ON investments
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can only access their own investments" ON investments FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can only access their own budgets" ON budgets;
+CREATE POLICY "Users can only access their own budgets" ON budgets FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can only access their own settings" ON settings;
-CREATE POLICY "Users can only access their own settings" ON settings
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can only access their own settings" ON settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

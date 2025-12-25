@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { Transaction, Category } from '../types';
 import Modal from './ui/Modal';
 import { TransactionListItem } from './TransactionList';
@@ -16,146 +16,132 @@ interface AllTransactionsModalProps {
   onUpdateCategoryMultiple: (ids: string[], categoryId: string) => void;
 }
 
-type SortKey = 'date' | 'amount' | 'type' | 'description' | 'categoryId';
+type SortKey = 'date' | 'amount' | 'description' | 'categoryId';
 type SortDirection = 'asc' | 'desc';
-
-const SortIcon = ({ direction }: { direction: SortDirection }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`inline-block ml-1 transition-transform ${direction === 'desc' ? 'rotate-180' : ''}`}>
-        <path d="m6 9 6 6 6-6"/>
-    </svg>
-);
 
 const AllTransactionsModal: React.FC<AllTransactionsModalProps> = ({ 
   isOpen, onClose, transactions, categories, onEdit, onDelete, onDuplicate, onDeleteMultiple, onUpdateCategoryMultiple
 }) => {
-  const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [newCategoryId, setNewCategoryId] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => { if (!isOpen) setSelectedIds(new Set()); }, [isOpen]);
-  useEffect(() => {
-    const transactionIds = new Set(transactions.map(t => t.id));
-    setSelectedIds(prev => {
-        const newSet = new Set(prev);
-        let changed = false;
-        for (const id of newSet) { if (!transactionIds.has(id)) { newSet.delete(id); changed = true; } }
-        return changed ? newSet : prev;
-    });
-  }, [transactions]);
+  const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
 
-  const requestSort = (key: SortKey) => {
-      let direction: SortDirection = 'asc';
-      if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
-      else if (sortConfig.key === key && sortConfig.direction === 'desc') direction = 'asc';
-      else if (key === 'date' || key === 'amount') direction = 'desc';
-      setSortConfig({ key, direction });
-  };
-
-  const sortedTransactions = useMemo(() => {
-    const sorted = [...transactions];
-    sorted.sort((a, b) => {
-        let aValue: any = a[sortConfig.key];
-        let bValue: any = b[sortConfig.key];
-        if (sortConfig.key === 'description') {
-            aValue = (a.description || categoryMap.get(a.categoryId)?.name || '').toLowerCase();
-            bValue = (b.description || categoryMap.get(b.categoryId)?.name || '').toLowerCase();
-        } else if (sortConfig.key === 'categoryId') {
-            aValue = categoryMap.get(a.categoryId)?.name.toLowerCase() || '';
-            bValue = categoryMap.get(b.categoryId)?.name.toLowerCase() || '';
+  const filteredAndSorted = useMemo(() => {
+    return transactions
+      .filter(tx => {
+        const desc = (tx.description || '').toLowerCase();
+        const catName = categoryMap.get(tx.categoryId)?.name.toLowerCase() || '';
+        return desc.includes(searchTerm.toLowerCase()) || catName.includes(searchTerm.toLowerCase());
+      })
+      .sort((a, b) => {
+        let aV = a[sortConfig.key];
+        let bV = b[sortConfig.key];
+        if (sortConfig.key === 'categoryId') {
+          aV = categoryMap.get(a.categoryId)?.name || '';
+          bV = categoryMap.get(b.categoryId)?.name || '';
         }
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        if (aV < bV) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aV > bV) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
-    });
-    return sorted;
-  }, [transactions, sortConfig, categoryMap]);
+      });
+  }, [transactions, searchTerm, sortConfig, categoryMap]);
 
-  const handleToggleSelection = (id: string) => {
+  const handleToggleSelect = (id: string) => {
     setSelectedIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
-      return newSet;
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
     });
   };
 
-  const handleToggleAll = () => {
-    if (selectedIds.size === transactions.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(transactions.map(t => t.id)));
-  };
-  
-  const selectedTransactionsList = useMemo(() => transactions.filter(t => selectedIds.has(t.id)), [transactions, selectedIds]);
-  const canChangeCategory = useMemo(() => {
-    if (selectedTransactionsList.length === 0) return false;
-    const firstType = selectedTransactionsList[0].type;
-    return selectedTransactionsList.every(t => t.type === firstType);
-  }, [selectedTransactionsList]);
-
-  const availableCategories = useMemo(() => {
-    if (!canChangeCategory) return [];
-    const type = selectedTransactionsList[0].type;
-    return categories.filter(c => c.type === type);
-  }, [categories, canChangeCategory, selectedTransactionsList]);
-  
-  useEffect(() => {
-    if (availableCategories.length > 0 && !availableCategories.find(c => c.id === newCategoryId)) setNewCategoryId(availableCategories[0].id);
-    else if (availableCategories.length === 0) setNewCategoryId('');
-  }, [availableCategories, newCategoryId]);
-
-  const handleDeleteSelected = () => { if (selectedIds.size > 0) onDeleteMultiple(Array.from(selectedIds)); };
-  const handleUpdateCategorySelected = () => {
-    if (selectedIds.size > 0 && newCategoryId && canChangeCategory) {
-      onUpdateCategoryMultiple(Array.from(selectedIds), newCategoryId);
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredAndSorted.length && filteredAndSorted.length > 0) {
       setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredAndSorted.map(t => t.id)));
     }
   };
 
+  const handleSort = (key: SortKey) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Transações do Mês" size="6xl">
-      <div className="max-h-[75vh] flex flex-col">
-        {transactions.length > 0 && (
-            <div className="flex items-center gap-4 px-4 py-3 bg-gray-100 dark:bg-slate-700/50 border-b dark:border-slate-600 rounded-t-lg text-sm font-semibold text-gray-600 dark:text-gray-300">
-                <div className="w-8 flex justify-center">
-                     <input type="checkbox" checked={transactions.length > 0 && selectedIds.size === transactions.length} onChange={handleToggleAll} className="h-4 w-4 rounded border-gray-300 dark:border-slate-500 text-primary-600 focus:ring-primary-500 dark:bg-slate-900" />
-                </div>
-                <div className="flex-1 grid grid-cols-12 gap-4 items-center pl-2">
-                    <button onClick={() => requestSort('date')} className={`col-span-2 flex items-center hover:text-primary-600 dark:hover:text-primary-400 ${sortConfig.key === 'date' ? 'text-primary-600 dark:text-primary-400' : ''}`}>
-                        Data {sortConfig.key === 'date' && <SortIcon direction={sortConfig.direction} />}
-                    </button>
-                    <button onClick={() => requestSort('categoryId')} className={`col-span-2 flex items-center hover:text-primary-600 dark:hover:text-primary-400 ${sortConfig.key === 'categoryId' ? 'text-primary-600 dark:text-primary-400' : ''}`}>
-                        Categoria {sortConfig.key === 'categoryId' && <SortIcon direction={sortConfig.direction} />}
-                    </button>
-                    <button onClick={() => requestSort('description')} className={`col-span-4 flex items-center hover:text-primary-600 dark:hover:text-primary-400 ${sortConfig.key === 'description' ? 'text-primary-600 dark:text-primary-400' : ''}`}>
-                        Descrição {sortConfig.key === 'description' && <SortIcon direction={sortConfig.direction} />}
-                    </button>
-                    <button onClick={() => requestSort('amount')} className={`col-span-2 text-right flex items-center justify-end hover:text-primary-600 dark:hover:text-primary-400 ${sortConfig.key === 'amount' ? 'text-primary-600 dark:text-primary-400' : ''}`}>
-                        Valor {sortConfig.key === 'amount' && <SortIcon direction={sortConfig.direction} />}
-                    </button>
-                    <div className="col-span-2 text-right">Ações</div>
-                </div>
+    <Modal isOpen={isOpen} onClose={onClose} title="Histórico de Transações" size="6xl">
+      <div className="flex flex-col h-[80vh]">
+        <div className="mb-4 flex flex-col sm:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full">
+            <input 
+              type="text" 
+              placeholder="Buscar por descrição ou categoria..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+            <div className="absolute left-3 top-2.5 text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             </div>
-        )}
-        <div className="flex-grow overflow-y-auto">
-          {transactions.length > 0 ? (
-            <ul className="space-y-1 pt-1">
-              {sortedTransactions.map(tx => (
-                <TransactionListItem key={tx.id} transaction={tx} category={categoryMap.get(tx.categoryId)} onEdit={() => { onEdit(tx); onClose(); }} onDelete={() => onDelete(tx.id)} onDuplicate={() => onDuplicate(tx.id)} showCheckbox={true} isSelected={selectedIds.has(tx.id)} onSelect={handleToggleSelection} />
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+             <button 
+                onClick={handleSelectAll}
+                className="px-3 py-2 text-sm bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-md transition-colors"
+             >
+                {selectedIds.size === filteredAndSorted.length && filteredAndSorted.length > 0 ? 'Desmarcar Todos' : 'Selecionar Filtrados'}
+             </button>
+             {selectedIds.size > 0 && (
+                <button 
+                    onClick={() => onDeleteMultiple(Array.from(selectedIds))}
+                    className="px-3 py-2 text-sm bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-md transition-colors"
+                >
+                    Apagar ({selectedIds.size})
+                </button>
+             )}
+          </div>
+        </div>
+
+        <div className="flex gap-4 mb-4 overflow-x-auto pb-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 border-b dark:border-slate-700">
+            <button onClick={() => handleSort('date')} className={`flex items-center gap-1 hover:text-primary-500 whitespace-nowrap ${sortConfig.key === 'date' ? 'text-primary-600' : ''}`}>
+                Data {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </button>
+            <button onClick={() => handleSort('description')} className={`flex items-center gap-1 hover:text-primary-500 whitespace-nowrap ${sortConfig.key === 'description' ? 'text-primary-600' : ''}`}>
+                Descrição {sortConfig.key === 'description' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </button>
+            <button onClick={() => handleSort('categoryId')} className={`flex items-center gap-1 hover:text-primary-500 whitespace-nowrap ${sortConfig.key === 'categoryId' ? 'text-primary-600' : ''}`}>
+                Categoria {sortConfig.key === 'categoryId' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </button>
+            <button onClick={() => handleSort('amount')} className={`flex items-center gap-1 hover:text-primary-500 whitespace-nowrap ${sortConfig.key === 'amount' ? 'text-primary-600' : ''}`}>
+                Valor {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+            </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto pr-2">
+          {filteredAndSorted.length === 0 ? (
+            <div className="text-center py-20 text-gray-500">Nenhuma transação encontrada.</div>
+          ) : (
+            <ul className="space-y-2">
+              {filteredAndSorted.map(tx => (
+                <TransactionListItem 
+                  key={tx.id} 
+                  transaction={tx} 
+                  category={categoryMap.get(tx.categoryId)} 
+                  onEdit={() => onEdit(tx)} 
+                  onDelete={() => onDelete(tx.id)} 
+                  onDuplicate={() => onDuplicate(tx.id)}
+                  showCheckbox={true}
+                  isSelected={selectedIds.has(tx.id)}
+                  onSelect={handleToggleSelect}
+                />
               ))}
             </ul>
-          ) : <p className="text-center text-gray-500 dark:text-gray-400 py-8">Nenhuma transação neste mês.</p>}
+          )}
         </div>
-        {selectedIds.size > 0 && (
-          <div className="mt-4 p-4 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-4">
-             <p className="font-semibold text-sm">{selectedIds.size} selecionado(s)</p>
-             <div className="flex items-center gap-2">
-                <select value={newCategoryId} onChange={(e) => setNewCategoryId(e.target.value)} disabled={!canChangeCategory} className="block px-3 py-1.5 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-xs">
-                    {canChangeCategory ? availableCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>) : <option>Tipos mistos</option>}
-                </select>
-                <button onClick={handleUpdateCategorySelected} disabled={!canChangeCategory || !newCategoryId} className="py-1.5 px-3 rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 text-xs">Mudar Categoria</button>
-                <button onClick={handleDeleteSelected} className="py-1.5 px-3 rounded-md bg-red-600 text-white hover:bg-red-700 text-xs">Apagar</button>
-             </div>
-          </div>
-        )}
       </div>
     </Modal>
   );

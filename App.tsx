@@ -96,7 +96,7 @@ const App: React.FC = () => {
   const {
     transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
-    plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid,
+    plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
     investments, addInvestment, updateInvestment, deleteInvestment,
     addCategory, updateCategory, deleteCategory,
@@ -414,6 +414,7 @@ const App: React.FC = () => {
                 onEdit={handleEditPlannedClick}
                 onDelete={handleRequestDeletePlanned}
                 onMarkAsPaid={markPlannedTransactionAsPaid}
+                onUnmarkAsPaid={unmarkPlannedTransactionAsPaid}
             />
         )}
         {view === 'cards' && (
@@ -452,20 +453,8 @@ const App: React.FC = () => {
         </div>
       )}
       <FloatingCalculator />
-      <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
-      <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}>
-        <TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} />
-      </Modal>
-      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}>
-        <PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} />
-      </Modal>
-      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
-        <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
-      </Modal>
-      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}>
-         <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} existingGroups={uniqueInvestmentGroups} />
-      </Modal>
-      <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
+
+      {/* MODAIS: A ordem importa para o Z-Index. Modais de lista/histórico vêm primeiro, modais de formulário/edição vêm depois para ficarem em cima */}
       <AllTransactionsModal
         isOpen={isAllTransactionsModalOpen}
         onClose={() => setAllTransactionsModalOpen(false)}
@@ -477,6 +466,27 @@ const App: React.FC = () => {
         onDeleteMultiple={handleDeleteMultipleClick}
         onUpdateCategoryMultiple={handleUpdateCategoryMultiple}
       />
+      
+      <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
+      
+      <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
+      
+      <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}>
+        <TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} />
+      </Modal>
+      
+      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}>
+        <PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} />
+      </Modal>
+      
+      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
+        <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
+      </Modal>
+      
+      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}>
+         <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} existingGroups={uniqueInvestmentGroups} />
+      </Modal>
+
       <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão">
         <div className="text-gray-700 dark:text-gray-300">
           <p>Deseja realmente apagar esta transação? Esta ação não poderá ser desfeita.</p>
@@ -486,6 +496,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </Modal>
+      
       <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento">
         <div className="text-gray-700 dark:text-gray-300">
             <p>Você deseja excluir este item planejado?</p>
@@ -503,6 +514,7 @@ const App: React.FC = () => {
             </div>
         </div>
       </Modal>
+      
        <Modal isOpen={isBulkConfirmOpen} onClose={() => setBulkConfirmOpen(false)} title="Confirmar Exclusão Múltipla">
             <div className="text-gray-700 dark:text-gray-300">
                 <p>Deseja realmente apagar as {idsToDelete.length} transações selecionadas? Esta ação não poderá ser desfeita.</p>

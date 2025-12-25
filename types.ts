@@ -1,3 +1,4 @@
+
 import type { FC, SVGProps } from 'react';
 
 export type TransactionType = 'income' | 'expense';
@@ -51,10 +52,10 @@ export interface Investment {
 export interface Category {
   id: string;
   name: string;
-  iconName: string; // Changed from Component to string for JSON storage
+  iconName: string; 
   color: string;
   type: TransactionType;
-  includeInTithing?: boolean; // New field for tithing calculation
+  includeInTithing?: boolean;
 }
 
 export interface Budget {
@@ -70,4 +71,4 @@ export interface AppSettings {
 
 export type Theme = 'light' | 'dark';
 
-export type View = 'dashboard' | 'planned' | 'cards' | 'categories' | 'investments';
+export type View = 'dashboard' | 'planned' | 'cards' | 'categories' | 'investments' | 'budgets';
