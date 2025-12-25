@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -10,8 +9,8 @@ interface State {
   error?: Error;
 }
 
-// Fix: Use the named import 'Component' instead of 'React.Component' to resolve TypeScript property access issues for 'this.state' and 'this.props'.
-class ErrorBoundary extends Component<Props, State> {
+// Fix: Explicitly extend React.Component to resolve issues where the compiler fails to recognize 'state' and 'props' properties.
+class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {

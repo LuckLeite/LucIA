@@ -64,34 +64,10 @@ const App: React.FC = () => {
   // Monitorar Autenticação
   useEffect(() => {
     if (!supabase) return;
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => subscription.unsubscribe();
   }, []);
-
-  const handleLogout = async () => {
-    if (supabase) {
-      try {
-        await supabase.auth.signOut();
-        localStorage.removeItem('lucia_transactions');
-        localStorage.removeItem('lucia_planned_transactions');
-        localStorage.removeItem('lucia_card_transactions');
-        localStorage.removeItem('lucia_categories');
-        localStorage.removeItem('lucia_investments');
-        setSession(null); 
-      } catch (e) {
-        console.error("Erro ao sair:", e);
-        window.location.reload();
-      }
-    }
-  };
 
   const {
     transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
@@ -206,7 +182,16 @@ const App: React.FC = () => {
     } catch(e) { console.error(e) }
   };
 
-  const handleAddCategoryClick = () => { setCategoryToEdit(null); setCategoryFormOpen(true); };
+  const handleAddCategoryClick = (type: 'income' | 'expense') => {
+      const currentCount = categories.filter(c => c.type === type).length;
+      if (currentCount >= 20) {
+          alert(`Você atingiu o limite de 20 categorias de ${type === 'income' ? 'receita' : 'despesa'}.`);
+          return;
+      }
+      setCategoryToEdit(null);
+      setCategoryFormOpen(true);
+  };
+
   const handleEditCategoryClick = (c: Category) => { setCategoryToEdit(c); setCategoryFormOpen(true); };
   const handleCategorySubmit = (data: Omit<Category, 'id'> | Category) => {
     if ('id' in data) updateCategory(data as Category);
@@ -304,26 +289,7 @@ const App: React.FC = () => {
     return Array.from(expenseByCategory.values());
   }, [filteredTransactions, categories]);
 
-  // TELA DE ERRO DE CONFIGURAÇÃO (EVITA TELA BRANCA)
-  if (!supabase) {
-      return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 px-4">
-              <div className="max-w-md w-full text-center space-y-6 bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl">
-                  <h1 className="text-4xl font-extrabold text-red-500">Flux</h1>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Configuração Pendente</h2>
-                  <p className="text-gray-600 dark:text-gray-400">
-                      O app não conseguiu se conectar ao Supabase. <br/>
-                      Verifique se você configurou as chaves corretamente em <code>lib/supabaseClient.ts</code>.
-                  </p>
-                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-sm rounded-lg text-left">
-                      <strong>Dica para Netlify:</strong> Se estiver deployando, adicione as variáveis <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> no painel de controle do Netlify.
-                  </div>
-                  <button onClick={() => window.location.reload()} className="w-full py-3 bg-primary-600 text-white font-bold rounded-md hover:bg-primary-700">Tentar Novamente</button>
-              </div>
-          </div>
-      );
-  }
-
+  if (!supabase) return null;
   if (!session) return <Auth />;
 
   if (loading) return (
@@ -334,6 +300,19 @@ const App: React.FC = () => {
             </svg>
         </div>
   );
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    window.location.reload();
+  };
+
+  const dashboardCombinedSummary = {
+      income: monthlySummary.income,
+      expense: monthlySummary.expense,
+      plannedIncome: combinedPlannedTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0),
+      plannedExpense: combinedPlannedTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0)
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 flex flex-col">
@@ -383,10 +362,10 @@ const App: React.FC = () => {
             <>
                 <Dashboard 
                     categories={categories}
-                    monthlyIncome={monthlySummary.income}
-                    monthlyExpense={monthlySummary.expense}
-                    monthlyPlannedExpense={monthlySummary.plannedExpense}
-                    monthlyPlannedIncome={monthlySummary.plannedIncome}
+                    monthlyIncome={dashboardCombinedSummary.income}
+                    monthlyExpense={dashboardCombinedSummary.expense}
+                    monthlyPlannedExpense={dashboardCombinedSummary.plannedExpense}
+                    monthlyPlannedIncome={dashboardCombinedSummary.plannedIncome}
                     balanceChartData={balanceChartData}
                     currentBalance={accumulatedBalanceAtSelectedMonth}
                 />
@@ -434,10 +413,16 @@ const App: React.FC = () => {
              />
         )}
         {view === 'categories' && (
-            <CategoryList categories={categories} onEdit={handleEditCategoryClick} onDelete={deleteCategory} />
+            <CategoryList 
+                categories={categories} 
+                onEdit={handleEditCategoryClick} 
+                onDelete={deleteCategory}
+                onAdd={handleAddCategoryClick}
+            />
         )}
       </main>
       <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">Developed By Lucas Leite 🥛</footer>
+      
       {view !== 'cards' && view !== 'categories' && (
         <div className="fixed bottom-6 right-6 z-30">
             <button onClick={() => {
@@ -454,7 +439,6 @@ const App: React.FC = () => {
       )}
       <FloatingCalculator />
 
-      {/* MODAIS: A ordem importa para o Z-Index. Modais de lista/histórico vêm primeiro, modais de formulário/edição vêm depois para ficarem em cima */}
       <AllTransactionsModal
         isOpen={isAllTransactionsModalOpen}
         onClose={() => setAllTransactionsModalOpen(false)}
@@ -466,61 +450,47 @@ const App: React.FC = () => {
         onDeleteMultiple={handleDeleteMultipleClick}
         onUpdateCategoryMultiple={handleUpdateCategoryMultiple}
       />
-      
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
-      
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
-      
       <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}>
         <TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} />
       </Modal>
-      
       <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}>
         <PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} />
       </Modal>
-      
       <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
         <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
       </Modal>
-      
       <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}>
          <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} existingGroups={uniqueInvestmentGroups} />
       </Modal>
-
       <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão">
-        <div className="text-gray-700 dark:text-gray-300">
-          <p>Deseja realmente apagar esta transação? Esta ação não poderá ser desfeita.</p>
-          <div className="flex justify-end gap-4 mt-6">
-            <button onClick={() => setConfirmModalOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600">Cancelar</button>
-            <button onClick={handleConfirmDelete} className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700">Apagar</button>
+        <div className="text-gray-700 dark:text-gray-300 text-center p-4">
+          <p className="mb-6">Deseja realmente apagar esta transação?</p>
+          <div className="flex justify-center gap-4">
+            <button onClick={() => setConfirmModalOpen(false)} className="py-2 px-6 rounded-md bg-gray-200 dark:bg-slate-700">Não</button>
+            <button onClick={handleConfirmDelete} className="py-2 px-6 rounded-md bg-red-600 text-white">Sim, Apagar</button>
           </div>
         </div>
       </Modal>
-      
       <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento">
-        <div className="text-gray-700 dark:text-gray-300">
+        <div className="text-gray-700 dark:text-gray-300 text-center p-4">
             <p>Você deseja excluir este item planejado?</p>
-            {hasFutureMatches && (
-                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                    <p className="text-sm">Identificamos outros lançamentos futuros idênticos a este.</p>
-                </div>
-            )}
-            <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
-                <button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600">Cancelar</button>
-                <button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700">Apagar Apenas Este</button>
+            <div className="flex flex-col sm:flex-row justify-center gap-4 mt-6">
+                <button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700">Voltar</button>
+                <button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-4 rounded-md bg-red-600 text-white">Este Apenas</button>
                 {hasFutureMatches && (
-                    <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-4 rounded-md bg-red-800 text-white hover:bg-red-900">Apagar Este e Futuros</button>
+                    <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-4 rounded-md bg-red-800 text-white">Este e Futuros</button>
                 )}
             </div>
         </div>
       </Modal>
-      
-       <Modal isOpen={isBulkConfirmOpen} onClose={() => setBulkConfirmOpen(false)} title="Confirmar Exclusão Múltipla">
-            <div className="text-gray-700 dark:text-gray-300">
-                <p>Deseja realmente apagar as {idsToDelete.length} transações selecionadas? Esta ação não poderá ser desfeita.</p>
-                <div className="flex justify-end gap-4 mt-6">
-                    <button onClick={() => setBulkConfirmOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600">Cancelar</button>
-                    <button onClick={handleConfirmBulkDelete} className="py-2 px-4 rounded-md bg-red-600 text-white hover:bg-red-700">Apagar</button>
+      <Modal isOpen={isBulkConfirmOpen} onClose={() => setBulkConfirmOpen(false)} title="Exclusão em Massa">
+            <div className="text-gray-700 dark:text-gray-300 text-center p-4">
+                <p className="mb-6">Apagar {idsToDelete.length} transações selecionadas?</p>
+                <div className="flex justify-center gap-4">
+                    <button onClick={() => setBulkConfirmOpen(false)} className="py-2 px-6 rounded-md bg-gray-200 dark:bg-slate-700">Não</button>
+                    <button onClick={handleConfirmBulkDelete} className="py-2 px-6 rounded-md bg-red-600 text-white">Sim, Apagar</button>
                 </div>
             </div>
         </Modal>

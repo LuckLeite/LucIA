@@ -1,19 +1,9 @@
-
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings, Investment, Budget } from '../types';
+import { INITIAL_CATEGORIES_TEMPLATE } from '../constants';
 
 const generateUUID = () => crypto.randomUUID();
-
-const STORAGE_KEYS = {
-    TRANSACTIONS: 'lucia_transactions',
-    PLANNED: 'lucia_planned_transactions',
-    CARDS: 'lucia_card_transactions',
-    CATEGORIES: 'lucia_categories',
-    SETTINGS: 'lucia_settings',
-    INVESTMENTS: 'lucia_investments',
-    BUDGETS: 'lucia_budgets'
-};
 
 const DEFAULT_SETTINGS: AppSettings = {
     calculateTithing: true,
@@ -57,47 +47,54 @@ export const useFinanceData = () => {
         }
     };
 
-    useEffect(() => {
-        let isMounted = true;
-        const loadData = async () => {
-            if (!supabase || !session) {
-                if (isMounted) setLoading(false);
-                return;
-            }
-            if (isMounted) {
-                setLoading(true);
-                setError(null);
-            }
-            try {
-                const [txs, pln, crd, inv, cat, bud] = await Promise.all([
-                    supabase.from('transactions').select('*').order('date', { ascending: false }),
-                    supabase.from('planned_transactions').select('*'),
-                    supabase.from('card_transactions').select('*'),
-                    supabase.from('investments').select('*'),
-                    supabase.from('categories').select('*'),
-                    supabase.from('budgets').select('*')
-                ]);
+    const loadData = useCallback(async () => {
+        if (!supabase || !session) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const [txs, pln, crd, inv, cat, bud] = await Promise.all([
+                supabase.from('transactions').select('*').order('date', { ascending: false }),
+                supabase.from('planned_transactions').select('*'),
+                supabase.from('card_transactions').select('*'),
+                supabase.from('investments').select('*'),
+                supabase.from('categories').select('*'),
+                supabase.from('budgets').select('*')
+            ]);
 
-                if (isMounted) {
-                    if (txs.data) setTransactions(txs.data);
-                    if (pln.data) setPlannedTransactions(txs.data ? pln.data : []);
-                    if (crd.data) setCardTransactions(crd.data);
-                    if (inv.data) setInvestments(inv.data);
-                    if (cat.data) setCategories(cat.data);
-                    if (bud.data) setBudgets(bud.data);
-                    setLoading(false);
+            // SEED: Se o usuário não tem categorias, criamos as básicas
+            if (cat.data && cat.data.length === 0) {
+                const seedCategories = INITIAL_CATEGORIES_TEMPLATE.map(c => ({
+                    ...c,
+                    id: generateUUID(),
+                    user_id: session.user.id
+                }));
+                const { data: insertedCats, error: seedError } = await supabase.from('categories').insert(seedCategories).select();
+                if (!seedError && insertedCats) {
+                    setCategories(insertedCats);
                 }
-            } catch (err: any) {
-                console.error("Erro ao carregar dados:", err);
-                if (isMounted) {
-                    setError("Não foi possível carregar os dados do servidor.");
-                    setLoading(false);
-                }
+            } else if (cat.data) {
+                setCategories(cat.data);
             }
-        };
-        loadData();
-        return () => { isMounted = false; };
+
+            if (txs.data) setTransactions(txs.data);
+            if (pln.data) setPlannedTransactions(pln.data);
+            if (crd.data) setCardTransactions(crd.data);
+            if (inv.data) setInvestments(inv.data);
+            if (bud.data) setBudgets(bud.data);
+            setLoading(false);
+        } catch (err: any) {
+            console.error("Erro ao carregar dados:", err);
+            setError("Não foi possível carregar os dados do servidor.");
+            setLoading(false);
+        }
     }, [session]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const getMonthlySummary = useCallback((date: Date) => {
         const monthPrefix = date.toISOString().slice(0, 7);
@@ -105,9 +102,11 @@ export const useFinanceData = () => {
         const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
         const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
         
-        const monthPlanned = plannedTransactions.filter(t => t.dueDate.startsWith(monthPrefix) && t.status === 'pending');
-        const plannedIncome = monthPlanned.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-        const plannedExpense = monthPlanned.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+        // Planejamento pendente (manual + gerado)
+        // Note: as funções useMemo de geração já cuidam do resto
+        const monthPlannedManual = plannedTransactions.filter(t => t.dueDate.startsWith(monthPrefix) && t.status === 'pending');
+        const plannedIncome = monthPlannedManual.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+        const plannedExpense = monthPlannedManual.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
 
         return { income, expense, plannedIncome, plannedExpense };
     }, [transactions, plannedTransactions]);
@@ -118,15 +117,6 @@ export const useFinanceData = () => {
         await syncItem('transactions', newTx);
     };
 
-    const addMultipleTransactions = async (txs: Omit<Transaction, 'id'>[]) => {
-        const newTxs = txs.map(t => ({ ...t, id: generateUUID(), user_id: session?.user?.id }));
-        setTransactions(prev => [...newTxs, ...prev]);
-        if (supabase && session) {
-            const { error: syncError } = await supabase.from('transactions').upsert(newTxs);
-            if (syncError) setError(syncError.message);
-        }
-    };
-
     const updateTransaction = async (tx: Transaction) => {
         setTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
         await syncItem('transactions', tx);
@@ -135,24 +125,6 @@ export const useFinanceData = () => {
     const deleteTransaction = async (id: string) => {
         setTransactions(prev => prev.filter(t => t.id !== id));
         await syncItem('transactions', { id }, 'delete');
-    };
-
-    const deleteMultipleTransactions = async (ids: string[]) => {
-        setTransactions(prev => prev.filter(t => !ids.includes(t.id)));
-        if (supabase) await supabase.from('transactions').delete().in('id', ids);
-    };
-
-    const updateMultipleTransactionsCategory = async (ids: string[], categoryId: string) => {
-        setTransactions(prev => prev.map(t => ids.includes(t.id) ? { ...t, categoryId } : t));
-        if (supabase) await supabase.from('transactions').update({ categoryId }).in('id', ids);
-    };
-
-    const duplicateTransaction = async (id: string) => {
-        const original = transactions.find(t => t.id === id);
-        if (original) {
-            const { id: _, ...data } = original;
-            await addTransaction(data);
-        }
     };
 
     const addPlannedTransaction = async (pt: Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount: number = 0) => {
@@ -197,38 +169,6 @@ export const useFinanceData = () => {
         if (supabase) await supabase.from('planned_transactions').delete().in('id', idsToDelete);
     };
 
-    const addCardTransaction = async (cardTx: Omit<CardTransaction, 'id'>) => {
-        const newTx = { ...cardTx, id: generateUUID() };
-        setCardTransactions(prev => [...prev, newTx]);
-        await syncItem('card_transactions', newTx);
-    };
-
-    const updateCardTransaction = async (cardTx: CardTransaction) => {
-        setCardTransactions(prev => prev.map(t => t.id === cardTx.id ? cardTx : t));
-        await syncItem('card_transactions', cardTx);
-    };
-
-    const deleteCardTransaction = async (id: string) => {
-        setCardTransactions(prev => prev.filter(t => t.id !== id));
-        await syncItem('card_transactions', { id }, 'delete');
-    };
-
-    const addInvestment = async (inv: Omit<Investment, 'id'>) => {
-        const newInv = { ...inv, id: generateUUID() };
-        setInvestments(prev => [...prev, newInv]);
-        await syncItem('investments', newInv);
-    };
-
-    const updateInvestment = async (inv: Investment) => {
-        setInvestments(prev => prev.map(i => i.id === inv.id ? inv : i));
-        await syncItem('investments', inv);
-    };
-
-    const deleteInvestment = async (id: string) => {
-        setInvestments(prev => prev.filter(i => i.id !== id));
-        await syncItem('investments', { id }, 'delete');
-    };
-
     const addCategory = async (cat: Omit<Category, 'id'>) => {
         const newCat = { ...cat, id: generateUUID() };
         setCategories(prev => [...prev, newCat]);
@@ -245,25 +185,10 @@ export const useFinanceData = () => {
         await syncItem('categories', { id }, 'delete');
     };
 
-    const addBudget = async (budget: Omit<Budget, 'id'>) => {
-        const newBudget = { ...budget, id: generateUUID() };
-        setBudgets(prev => [...prev, newBudget]);
-        await syncItem('budgets', newBudget);
-    };
-
-    const updateBudget = async (budget: Budget) => {
-        setBudgets(prev => prev.map(b => b.id === budget.id ? budget : b));
-        await syncItem('budgets', budget);
-    };
-
-    const deleteBudget = async (id: string) => {
-        setBudgets(prev => prev.filter(b => b.id !== id));
-        await syncItem('budgets', { id }, 'delete');
-    };
-
     const generatedTithing = useMemo(() => {
-        if (!settings.calculateTithing) return [];
-        const tithingCat = categories.find(c => c.name === 'Dizimo' && c.type === 'expense');
+        if (!settings.calculateTithing || categories.length === 0) return [];
+        // Busca insensível a caixa
+        const tithingCat = categories.find(c => c.name.toLowerCase() === 'dizimo' && c.type === 'expense');
         if (!tithingCat) return [];
 
         const monthlyIncome = new Map<string, number>();
@@ -297,7 +222,8 @@ export const useFinanceData = () => {
     }, [transactions, categories, settings.calculateTithing, plannedTransactions]);
 
     const generatedCardInvoices = useMemo(() => {
-        const cardCat = categories.find(c => c.name === 'Cartão' && c.type === 'expense');
+        if (categories.length === 0) return [];
+        const cardCat = categories.find(c => c.name.toLowerCase() === 'cartão' && c.type === 'expense');
         if (!cardCat) return [];
         
         const cardMonthlySum = new Map<string, number>();
@@ -339,10 +265,9 @@ export const useFinanceData = () => {
 
     return {
         transactions, categories, budgets, plannedTransactions, cardTransactions, investments, settings, loading, error,
-        addTransaction, updateTransaction, deleteTransaction, duplicateTransaction, addMultipleTransactions,
-        deleteMultipleTransactions, updateMultipleTransactionsCategory, getMonthlySummary,
-        addBudget, updateBudget, deleteBudget,
-        addCategory, updateCategory, deleteCategory,
+        // Fix: Expose getMonthlySummary so it can be accessed in App.tsx
+        getMonthlySummary,
+        addTransaction, updateTransaction, deleteTransaction, 
         addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
         markPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             await addTransaction({ 
@@ -354,34 +279,76 @@ export const useFinanceData = () => {
             });
 
             const paidItem: PlannedTransaction = { ...planned, status: 'paid' };
-            
-            if (planned.isGenerated) {
-                setPlannedTransactions(prev => [...prev, paidItem]);
-                await syncItem('planned_transactions', paidItem);
-            } else {
-                setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? paidItem : t));
-                await syncItem('planned_transactions', paidItem);
-            }
+            setPlannedTransactions(prev => {
+                const exists = prev.find(t => t.id === planned.id);
+                if (exists) return prev.map(t => t.id === planned.id ? paidItem : t);
+                return [...prev, paidItem];
+            });
+            await syncItem('planned_transactions', paidItem);
         },
         unmarkPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             const pendingItem: PlannedTransaction = { ...planned, status: 'pending' };
-            
-            // Se for gerado automático, ao desbaixar nós removemos ele do banco para ele voltar a ser virtual
             if (planned.id.startsWith('gen_')) {
                 setPlannedTransactions(prev => prev.filter(t => t.id !== planned.id));
                 await syncItem('planned_transactions', { id: planned.id }, 'delete');
             } else {
-                // Se for manual, apenas voltamos para pendente
                 setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? pendingItem : t));
                 await syncItem('planned_transactions', pendingItem);
             }
         },
-        addCardTransaction, updateCardTransaction, deleteCardTransaction,
-        addInvestment, updateInvestment, deleteInvestment,
+        addCategory, updateCategory, deleteCategory,
         generatedCardInvoices,
         generatedTithing,
         totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0),
         updateSettings: (s: AppSettings) => setSettings(s),
+        addMultipleTransactions: async (txs: Omit<Transaction, 'id'>[]) => {
+            const newTxs = txs.map(t => ({ ...t, id: generateUUID(), user_id: session?.user?.id }));
+            setTransactions(prev => [...newTxs, ...prev]);
+            if (supabase && session) {
+                await supabase.from('transactions').upsert(newTxs);
+            }
+        },
+        deleteMultipleTransactions: async (ids: string[]) => {
+            setTransactions(prev => prev.filter(t => !ids.includes(t.id)));
+            if (supabase) await supabase.from('transactions').delete().in('id', ids);
+        },
+        updateMultipleTransactionsCategory: async (ids: string[], categoryId: string) => {
+            setTransactions(prev => prev.map(t => ids.includes(t.id) ? { ...t, categoryId } : t));
+            if (supabase) await supabase.from('transactions').update({ categoryId }).in('id', ids);
+        },
+        duplicateTransaction: async (id: string) => {
+            const original = transactions.find(t => t.id === id);
+            if (original) {
+                const { id: _, ...data } = original;
+                await addTransaction(data);
+            }
+        },
+        addCardTransaction: async (tx: Omit<CardTransaction, 'id'>) => {
+            const newTx = { ...tx, id: generateUUID() };
+            setCardTransactions(prev => [...prev, newTx]);
+            await syncItem('card_transactions', newTx);
+        },
+        updateCardTransaction: async (tx: CardTransaction) => {
+            setCardTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
+            await syncItem('card_transactions', tx);
+        },
+        deleteCardTransaction: async (id: string) => {
+            setCardTransactions(prev => prev.filter(t => t.id !== id));
+            await syncItem('card_transactions', { id }, 'delete');
+        },
+        addInvestment: async (inv: Omit<Investment, 'id'>) => {
+            const newInv = { ...inv, id: generateUUID() };
+            setInvestments(prev => [...prev, newInv]);
+            await syncItem('investments', newInv);
+        },
+        updateInvestment: async (inv: Investment) => {
+            setInvestments(prev => prev.map(i => i.id === inv.id ? inv : i));
+            await syncItem('investments', inv);
+        },
+        deleteInvestment: async (id: string) => {
+            setInvestments(prev => prev.filter(i => i.id !== id));
+            await syncItem('investments', { id }, 'delete');
+        },
         exportData: () => {
             const data = { transactions, plannedTransactions, cardTransactions, investments, categories, settings };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
