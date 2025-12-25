@@ -26,7 +26,7 @@ const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height
 const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
 const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 const ImportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 13V3"/><path d="m8 9 4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/></svg>;
-const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0 2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0 2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 const LogoutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const parseDateAsUTC = (dateString: string) => {
@@ -80,17 +80,14 @@ const App: React.FC = () => {
     if (supabase) {
       try {
         await supabase.auth.signOut();
-        // Limpar cache local para não vazar nada na interface antes do redirect
         localStorage.removeItem('lucia_transactions');
         localStorage.removeItem('lucia_planned_transactions');
         localStorage.removeItem('lucia_card_transactions');
         localStorage.removeItem('lucia_categories');
         localStorage.removeItem('lucia_investments');
-        // O estado session será atualizado automaticamente pelo listener onAuthStateChange
         setSession(null); 
       } catch (e) {
         console.error("Erro ao sair:", e);
-        // Fallback caso o signOut falhe
         window.location.reload();
       }
     }
@@ -306,6 +303,26 @@ const App: React.FC = () => {
         });
     return Array.from(expenseByCategory.values());
   }, [filteredTransactions, categories]);
+
+  // TELA DE ERRO DE CONFIGURAÇÃO (EVITA TELA BRANCA)
+  if (!supabase) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 px-4">
+              <div className="max-w-md w-full text-center space-y-6 bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl">
+                  <h1 className="text-4xl font-extrabold text-red-500">Flux</h1>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Configuração Pendente</h2>
+                  <p className="text-gray-600 dark:text-gray-400">
+                      O app não conseguiu se conectar ao Supabase. <br/>
+                      Verifique se você configurou as chaves corretamente em <code>lib/supabaseClient.ts</code>.
+                  </p>
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-sm rounded-lg text-left">
+                      <strong>Dica para Netlify:</strong> Se estiver deployando, adicione as variáveis <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> no painel de controle do Netlify.
+                  </div>
+                  <button onClick={() => window.location.reload()} className="w-full py-3 bg-primary-600 text-white font-bold rounded-md hover:bg-primary-700">Tentar Novamente</button>
+              </div>
+          </div>
+      );
+  }
 
   if (!session) return <Auth />;
 
