@@ -61,7 +61,14 @@ export const TransactionListItem: React.FC<{
           <div className="flex gap-2 items-center text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             <span className="whitespace-nowrap">{parseDateAsUTC(transaction.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</span>
             {category && (
-                <span className="truncate px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 border dark:border-slate-600" style={{ borderColor: `${category.color}40`, color: category.color }}>
+                <span 
+                    className="truncate px-1.5 py-0.5 rounded border font-medium text-[9px] sm:text-[11px]" 
+                    style={{ 
+                        borderColor: `${category.color}40`, 
+                        color: category.color,
+                        backgroundColor: `${category.color}15`
+                    }}
+                >
                     {category.name}
                 </span>
             )}

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import Modal from './ui/Modal';
 import type { AppSettings } from '../types';
@@ -6,7 +7,6 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   exportData: () => void;
-  // Update: allow importData to return a boolean or a Promise<boolean> to match the async implementation in hooks
   importData: (json: string) => boolean | Promise<boolean>;
   clearAllData: () => void;
   settings: AppSettings;
@@ -26,7 +26,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
         if (!file) return;
 
         const reader = new FileReader();
-        // Update: make onload async and await the importData result to correctly handle async imports
         reader.onload = async (event) => {
             const text = event.target?.result as string;
             const success = await importData(text);
@@ -39,12 +38,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
             }
         };
         reader.readAsText(file);
-        // Reset input
         e.target.value = '';
     };
 
     const handleClearClick = () => {
-        if(window.confirm("Tem certeza que deseja apagar TODOS os dados? Essa ação não pode ser desfeita.")) {
+        if(window.confirm("Tem certeza que deseja apagar TODOS os seus dados salvos? Seus lançamentos, cartões e categorias personalizadas serão excluídos permanentemente.")) {
             clearAllData();
             onClose();
         }
@@ -83,13 +81,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
                 {/* Data Management Section */}
                 <div className="space-y-4 pt-4">
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 border-b dark:border-slate-700 pb-2">Dados</h3>
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-                        <p className="font-semibold mb-1">Modo Offline / Local</p>
-                        <p>Seus dados estão salvos apenas neste navegador/computador. Faça backups regularmente para garantir que não perderá suas informações.</p>
-                    </div>
-
+                    
                     <div className="flex flex-col gap-2">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Gera um arquivo JSON com todas as suas transações.</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Utilize os botões abaixo para gerenciar backups manuais dos seus dados.</p>
                         
                         <div className="flex gap-3 mt-2">
                             <button 
@@ -126,7 +120,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
                             className="w-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 font-semibold py-2 px-4 rounded flex items-center justify-center gap-2"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                            Apagar Tudo (Resetar App)
+                            Apagar Tudo (Limpar Conta)
                         </button>
                     </div>
                 </div>

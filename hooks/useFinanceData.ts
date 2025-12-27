@@ -7,7 +7,7 @@ import { INITIAL_CATEGORIES_TEMPLATE } from '../constants';
 const generateUUID = () => crypto.randomUUID();
 
 const DEFAULT_SETTINGS: AppSettings = {
-    calculateTithing: true,
+    calculateTithing: false, // Iniciar desligado conforme solicitado
 };
 
 export const useFinanceData = () => {
@@ -56,13 +56,14 @@ export const useFinanceData = () => {
         setLoading(true);
         setError(null);
         try {
-            const [txs, pln, crd, inv, cat, bud] = await Promise.all([
+            const [txs, pln, crd, inv, cat, bud, set] = await Promise.all([
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
                 supabase.from('planned_transactions').select('*'),
                 supabase.from('card_transactions').select('*'),
                 supabase.from('investments').select('*'),
                 supabase.from('categories').select('*'),
-                supabase.from('budgets').select('*')
+                supabase.from('budgets').select('*'),
+                supabase.from('settings').select('*').single()
             ]);
 
             // SEED AUTOMÁTICO PARA NOVOS USUÁRIOS
@@ -85,10 +86,14 @@ export const useFinanceData = () => {
             if (crd.data) setCardTransactions(crd.data);
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
+            if (set.data) setSettings(set.data);
             setLoading(false);
         } catch (err: any) {
             console.error("Erro ao carregar dados:", err);
-            setError("Não foi possível carregar os dados.");
+            // Ignore single settings missing error for new users
+            if (err.code !== 'PGRST116') {
+                setError("Não foi possível carregar os dados.");
+            }
             setLoading(false);
         }
     }, [session]);
@@ -304,7 +309,16 @@ export const useFinanceData = () => {
         generatedCardInvoices,
         generatedTithing,
         totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0),
-        updateSettings: (s: AppSettings) => setSettings(s),
+        updateSettings: async (s: AppSettings) => {
+            setSettings(s);
+            if (supabase && session) {
+                await supabase.from('settings').upsert({
+                    ...s,
+                    id: 'global',
+                    user_id: session.user.id
+                });
+            }
+        },
         addMultipleTransactions: async (txs: Omit<Transaction, 'id'>[]) => {
             const newTxs = txs.map(t => ({ ...t, id: generateUUID() }));
             setTransactions(prev => [...newTxs, ...prev]);
@@ -374,6 +388,33 @@ export const useFinanceData = () => {
                 return true;
             } catch (e) { return false; }
         },
-        clearAllData: () => { localStorage.clear(); window.location.reload(); }
+        clearAllData: async () => {
+            if (!supabase || !session) return;
+            const userId = session.user.id;
+            try {
+                setLoading(true);
+                await Promise.all([
+                    supabase.from('transactions').delete().eq('user_id', userId),
+                    supabase.from('planned_transactions').delete().eq('user_id', userId),
+                    supabase.from('card_transactions').delete().eq('user_id', userId),
+                    supabase.from('investments').delete().eq('user_id', userId),
+                    supabase.from('categories').delete().eq('user_id', userId),
+                    supabase.from('budgets').delete().eq('user_id', userId),
+                    supabase.from('settings').delete().eq('user_id', userId),
+                ]);
+                setTransactions([]);
+                setPlannedTransactions([]);
+                setCardTransactions([]);
+                setInvestments([]);
+                setCategories([]);
+                setSettings(DEFAULT_SETTINGS);
+                await loadData(); // Reload will re-seed categories
+            } catch (e) {
+                console.error("Erro ao resetar dados:", e);
+                setError("Erro ao apagar dados do servidor.");
+            } finally {
+                setLoading(false);
+            }
+        }
     };
 };
