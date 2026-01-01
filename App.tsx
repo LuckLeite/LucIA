@@ -26,7 +26,7 @@ const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height
 const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
 const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 const ImportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 13V3"/><path d="m8 9 4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/></svg>;
-const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1-2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
 const LogoutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const App: React.FC = () => {
@@ -168,47 +168,50 @@ const App: React.FC = () => {
 
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
   
-  const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix)), [plannedTransactions, monthPrefix]);
+  // FILTRO: Removemos qualquer item que tenha isGenerated: true da lista base vinda do banco.
+  // Isso evita que o registro "âncora" (usado só para salvar a data) apareça duplicado com o resultado do gerador dinâmico.
+  const filteredPlannedTransactions = useMemo(() => 
+    plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && !pt.isGenerated), 
+  [plannedTransactions, monthPrefix]);
+
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
   const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
-  
-  // RESTAURAÇÃO: Banco de Movimento (Aparece apenas na aba Planejados)
   const filteredMovement = useMemo(() => getGeneratedMovementForMonth(monthPrefix), [getGeneratedMovementForMonth, monthPrefix]);
 
   const combinedPlannedTransactions = useMemo(() => 
     [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement].sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
   [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement]);
 
-  // CORREÇÃO DO SALDO: Agora reflete apenas as transações REALIZADAS (Histórico total até o fim do mês filtrado)
-  const currentMonthActualBalance = useMemo(() => {
+  const currentMonthRealizedBalance = useMemo(() => {
     const lastDayOfFilteredMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).toISOString().split('T')[0];
-    
-    // Todas as transações realizadas (Receita - Despesa) desde o início dos tempos até o fim do mês atual
     return transactions
         .filter(tx => tx.date <= lastDayOfFilteredMonth)
         .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0);
   }, [transactions, displayDate]);
 
-  // CORREÇÃO DO GRÁFICO: Agora mostra a evolução do dinheiro REAL
   const balanceChartData = useMemo(() => {
     const firstDayOfMonthISO = `${monthPrefix}-01`;
-    
-    // Saldo acumulado de todo o histórico ANTES de começar este mês
     const startBalance = transactions
         .filter(tx => tx.date < firstDayOfMonthISO)
         .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
 
     const dailyChanges = new Map<number, number>();
-    
-    // Mudanças APENAS por transações REALIZADAS no mês
     filteredTransactions.forEach(tx => {
         const day = parseInt(tx.date.split('-')[2], 10);
         const change = tx.type === 'income' ? tx.amount : -tx.amount;
         dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
     });
 
+    combinedPlannedTransactions
+        .filter(pt => pt.status === 'pending')
+        .forEach(pt => {
+            const day = parseInt(pt.dueDate.split('-')[2], 10);
+            const change = pt.type === 'income' ? pt.amount : -pt.amount;
+            dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
+        });
+
     const daysInMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
-    const fullChartData: { date: string; balance: number }[] = [];
+    const fullChartData = [];
     let runningBalance = startBalance;
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -217,12 +220,12 @@ const App: React.FC = () => {
     }
 
     if (fullChartData.length <= 15) return fullChartData;
-    const dispData: { date: string; balance: number }[] = [fullChartData[0]];
+    const dispData = [fullChartData[0]];
     const step = 2;
     for (let i = 1; i < fullChartData.length - 1; i += step) dispData.push(fullChartData[i]);
     dispData.push(fullChartData[fullChartData.length - 1]);
     return dispData;
-  }, [transactions, filteredTransactions, monthPrefix, displayDate]);
+  }, [transactions, filteredTransactions, combinedPlannedTransactions, monthPrefix, displayDate]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
@@ -241,6 +244,9 @@ const App: React.FC = () => {
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900"><div className="animate-spin h-10 w-10 border-4 border-primary-500 border-t-transparent rounded-full" /></div>;
 
   const handleLogout = async () => { if (supabase) await supabase.auth.signOut(); setSession(null); window.location.reload(); };
+
+  const plannedIncomeSum = combinedPlannedTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0);
+  const plannedExpenseSum = combinedPlannedTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 flex flex-col">
@@ -280,10 +286,10 @@ const App: React.FC = () => {
                     categories={categories}
                     monthlyIncome={getMonthlySummary(displayDate).income}
                     monthlyExpense={getMonthlySummary(displayDate).expense}
-                    monthlyPlannedExpense={combinedPlannedTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0)}
-                    monthlyPlannedIncome={combinedPlannedTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0)}
+                    monthlyPlannedExpense={plannedExpenseSum}
+                    monthlyPlannedIncome={plannedIncomeSum}
                     balanceChartData={balanceChartData}
-                    currentBalance={currentMonthActualBalance}
+                    currentBalance={currentMonthRealizedBalance}
                 />
                 <TransactionList transactions={filteredTransactions.slice(0, 5)} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onViewAll={() => setAllTransactionsModalOpen(true)} />
                 <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>

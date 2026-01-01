@@ -42,7 +42,7 @@ const Dashboard: React.FC<DashboardProps> = ({ monthlyIncome, monthlyExpense, mo
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-        <StatCard title="Saldo no Mês" amount={currentBalance} color={currentBalance >= 0 ? 'text-income' : 'text-expense'} icon={<BalanceIcon />} />
+        <StatCard title="Saldo atual" amount={currentBalance} color={currentBalance >= 0 ? 'text-income' : 'text-expense'} icon={<BalanceIcon />} />
         <StatCard title="Receitas (Mês)" amount={monthlyIncome} color="text-income" icon={<IncomeIcon />} />
         <StatCard title="Receitas Planejadas" amount={monthlyPlannedIncome} color="text-cyan-500" icon={<PlannedIncomeIcon />} />
         <StatCard title="Despesas (Mês)" amount={monthlyExpense} color="text-expense" icon={<ExpenseIcon />} />

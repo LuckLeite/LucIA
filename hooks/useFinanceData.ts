@@ -31,11 +31,15 @@ export const useFinanceData = () => {
 
     const syncItem = async (table: string, item: any, operation: 'upsert' | 'delete' = 'upsert') => {
         if (!supabase || !session) return;
+        
+        // Proteção: itens que ainda são puramente voláteis (gen_) não vão para o banco via sync padrão
+        if (operation === 'upsert' && String(item.id).startsWith('gen_')) return;
+
         try {
             if (operation === 'delete') {
                 await supabase.from(table).delete().eq('id', item.id);
             } else {
-                const { isGenerated, ...dataToSync } = item;
+                const { ...dataToSync } = item;
                 await supabase.from(table).upsert({ ...dataToSync, user_id: session.user.id });
             }
         } catch (e: any) {
@@ -73,7 +77,7 @@ export const useFinanceData = () => {
             }
 
             if (txs.data) setTransactions(txs.data);
-            if (pln.data) setPlannedTransactions(pln.data);
+            if (pln.data) setPlannedTransactions(pln.data || []);
             if (crd.data) setCardTransactions(crd.data);
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
@@ -125,11 +129,23 @@ export const useFinanceData = () => {
     };
 
     const updatePlannedTransaction = async (tx: PlannedTransaction) => {
-        setPlannedTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
-        await syncItem('planned_transactions', tx);
+        let finalTx = { ...tx };
+        
+        // Se o usuário está alterando um item que era volátil (gen_), 
+        // nós o salvamos no banco para fixar a data, mas mantemos isGenerated: true
+        if (String(tx.id).startsWith('gen_')) {
+            finalTx.id = generateUUID();
+            finalTx.isGenerated = true; // Crucial para o gerador saber que deve "adotar" este item
+            setPlannedTransactions(prev => [...prev, finalTx]);
+        } else {
+            setPlannedTransactions(prev => prev.map(t => t.id === tx.id ? finalTx : t));
+        }
+        
+        await syncItem('planned_transactions', finalTx);
     };
 
     const deletePlannedTransaction = async (id: string, deleteFuture: boolean = false) => {
+        if (String(id).startsWith('gen_')) return;
         if (!deleteFuture) {
             setPlannedTransactions(prev => prev.filter(t => t.id !== id));
             await syncItem('planned_transactions', { id }, 'delete');
@@ -145,63 +161,45 @@ export const useFinanceData = () => {
         }
     };
 
-    const getMonthlySummary = useCallback((date: Date) => {
-        const monthPrefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const monthTxs = transactions.filter(t => t.date.startsWith(monthPrefix));
-        const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-        const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-        return { income, expense, balance: income - expense };
-    }, [transactions]);
-
-    // LÓGICA DO BANCO DE MOVIMENTO (RESTAURAÇÃO DE DEZEMBRO)
-    // Calcula o excedente de categorias "Movimento" de todo o histórico anterior ao mês visualizado.
     const getGeneratedMovementForMonth = useCallback((monthPrefix: string) => {
         if (categories.length === 0) return [];
+        const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const movCategoryIds = categories.filter(c => normalizeStr(c.name) === 'movimento').map(c => c.id);
+        if (movCategoryIds.length === 0) return [];
+
+        const firstDay = `${monthPrefix}-01`;
+        const [year, month] = monthPrefix.split('-').map(Number);
+        const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
         
-        const movCategories = categories.filter(c => 
-            c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 'movimento'
+        // Cálculo dinâmico do saldo
+        const monthTxs = transactions.filter(t => t.date >= firstDay && t.date <= lastDay && movCategoryIds.includes(t.categoryId));
+        const deposits = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+        const withdrawals = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+        const monthBalance = deposits - withdrawals;
+
+        // Se já recebeu o movimento (transação real), oculta o planejamento
+        const hasRealIncome = transactions.some(t => t.date >= firstDay && t.date <= lastDay && movCategoryIds.includes(t.categoryId) && t.type === 'income');
+        if (monthBalance <= 0 || hasRealIncome) return [];
+
+        // BUSCA PREFERÊNCIA: Procura no banco um registro isGenerated de Movimento para este mês
+        const persisted = plannedTransactions.find(p => 
+            p.dueDate.startsWith(monthPrefix) && 
+            movCategoryIds.includes(p.categoryId) && 
+            p.isGenerated === true &&
+            p.type === 'income'
         );
-        if (movCategories.length === 0) return [];
 
-        const incomeIds = movCategories.filter(c => c.type === 'income').map(c => c.id);
-        const expenseIds = movCategories.filter(c => c.type === 'expense').map(c => c.id);
-        
-        // Data de início do mês atual (Ex: 2024-01-01)
-        const firstDayOfCurrentMonth = `${monthPrefix}-01`;
-        
-        // Filtra transações que ocorreram ANTES do mês atual
-        const historyTxs = transactions.filter(t => t.date < firstDayOfCurrentMonth);
-
-        // Depósitos (Gastos em Movimento) aumentam o banco. Saques (Receitas em Movimento) diminuem o banco.
-        const totalDeposits = historyTxs.filter(t => t.type === 'expense' && expenseIds.includes(t.categoryId)).reduce((acc, t) => acc + t.amount, 0);
-        const totalWithdrawals = historyTxs.filter(t => t.type === 'income' && incomeIds.includes(t.categoryId)).reduce((acc, t) => acc + t.amount, 0);
-        
-        const accumulatedBalance = totalDeposits - totalWithdrawals;
-        
-        if (accumulatedBalance <= 0) return [];
-
-        const movIncomeCat = movCategories.find(c => c.type === 'income');
+        const movIncomeCat = categories.find(c => normalizeStr(c.name) === 'movimento' && c.type === 'income');
         if (!movIncomeCat) return [];
 
-        // ID fixado pelo mês para evitar duplicação total
-        const genId = `gen_mov_acc_${monthPrefix}`;
-        
-        // Verifica se JÁ EXISTE um item com esse ID ou mesma descrição para este mês exato
-        const alreadyExists = plannedTransactions.some(p => 
-            p.id === genId || 
-            (p.description === 'Saldo Acumulado Movimento' && p.dueDate.startsWith(monthPrefix))
-        );
-        
-        if (alreadyExists) return [];
-
         return [{
-            id: genId,
-            amount: accumulatedBalance,
+            id: persisted ? persisted.id : `gen_mov_acc_${monthPrefix}`,
+            amount: monthBalance, // O VALOR É SEMPRE O CALCULADO AGORA
             type: 'income' as const,
             categoryId: movIncomeCat.id,
-            description: `Saldo Acumulado Movimento`,
-            dueDate: `${monthPrefix}-01`,
-            status: 'pending' as const,
+            description: persisted ? persisted.description : `Saldo Acumulado Movimento`,
+            dueDate: persisted ? persisted.dueDate : firstDay, // A DATA É A DO BANCO SE EXISTIR
+            status: persisted ? persisted.status : 'pending' as const,
             isGenerated: true
         }];
     }, [transactions, categories, plannedTransactions]);
@@ -210,19 +208,39 @@ export const useFinanceData = () => {
         if (!settings.calculateTithing || categories.length === 0) return [];
         const tithingCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('dizimo')) && c.type === 'expense');
         if (!tithingCat) return [];
-        const monthlyIncome = new Map<string, number>();
-        transactions.filter(t => t.type === 'income').forEach(t => {
-            const cat = categories.find(c => c.id === t.categoryId);
-            if (cat?.includeInTithing) {
-                const month = t.date.slice(0, 7);
-                monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + t.amount);
-            }
-        });
+        
         const items: PlannedTransaction[] = [];
-        monthlyIncome.forEach((income, month) => {
-            const genId = `gen_tithing_${month}`;
-            if (!plannedTransactions.some(p => p.id === genId)) {
-                items.push({ id: genId, amount: income * 0.1, type: 'expense', categoryId: tithingCat.id, description: `Dízimo Estimado - ${month}`, dueDate: `${month}-10`, status: 'pending', isGenerated: true });
+        const incomeMonths = new Set(transactions.filter(t => t.type === 'income').map(t => t.date.slice(0, 7)));
+
+        incomeMonths.forEach(month => {
+            const firstDay = `${month}-01`;
+            const [y, m] = month.split('-').map(Number);
+            const lastDay = new Date(y, m, 0).toISOString().split('T')[0];
+
+            const hasReal = transactions.some(t => t.date >= firstDay && t.date <= lastDay && t.categoryId === tithingCat.id);
+            if (hasReal) return;
+
+            const totalIncome = transactions
+                .filter(t => t.date.startsWith(month) && t.type === 'income')
+                .reduce((acc, t) => {
+                    const cat = categories.find(c => c.id === t.categoryId);
+                    return cat?.includeInTithing ? acc + t.amount : acc;
+                }, 0);
+
+            if (totalIncome > 0) {
+                // BUSCA PREFERÊNCIA
+                const persisted = plannedTransactions.find(p => p.dueDate.startsWith(month) && p.categoryId === tithingCat.id && p.isGenerated === true);
+                
+                items.push({ 
+                    id: persisted ? persisted.id : `gen_tithing_${month}`, 
+                    amount: totalIncome * 0.1, 
+                    type: 'expense', 
+                    categoryId: tithingCat.id, 
+                    description: persisted ? persisted.description : `Dízimo Estimado - ${month}`, 
+                    dueDate: persisted ? persisted.dueDate : `${month}-10`, 
+                    status: persisted ? persisted.status : 'pending', 
+                    isGenerated: true 
+                });
             }
         });
         return items;
@@ -232,28 +250,44 @@ export const useFinanceData = () => {
         if (categories.length === 0) return [];
         const cardCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('cartao')) && c.type === 'expense');
         if (!cardCat) return [];
-        const cardMonthlySum = new Map<string, number>();
-        cardTransactions.forEach(cardTx => {
-            const installmentValue = cardTx.totalAmount / cardTx.installments;
-            const start = new Date(cardTx.purchaseDate + 'T12:00:00Z');
-            for (let i = 1; i <= cardTx.installments; i++) {
+        
+        const invoices: PlannedTransaction[] = [];
+        const cardMonths = new Map<string, number>();
+
+        cardTransactions.forEach(tx => {
+            const monthly = tx.totalAmount / tx.installments;
+            const start = new Date(tx.purchaseDate + 'T12:00:00Z');
+            for (let i = 1; i <= tx.installments; i++) {
                 const d = new Date(start);
                 d.setUTCMonth(start.getUTCMonth() + i);
-                const monthKey = d.toISOString().slice(0, 7);
-                const compositeKey = `${cardTx.card}|${monthKey}`;
-                cardMonthlySum.set(compositeKey, (cardMonthlySum.get(compositeKey) || 0) + installmentValue);
+                const mKey = d.toISOString().slice(0, 7);
+                cardMonths.set(mKey, (cardMonths.get(mKey) || 0) + monthly);
             }
         });
-        const invoices: PlannedTransaction[] = [];
-        cardMonthlySum.forEach((val, compositeKey) => {
-            const [cardName, month] = compositeKey.split('|');
-            const genId = `gen_card_${cardName}_${month}`;
-            if (!plannedTransactions.some(p => p.id === genId)) {
-                invoices.push({ id: genId, amount: val, type: 'expense', categoryId: cardCat.id, description: `Fatura ${cardName} - ${month}`, dueDate: `${month}-10`, status: 'pending', isGenerated: true });
-            }
+
+        cardMonths.forEach((val, month) => {
+            const persisted = plannedTransactions.find(p => p.dueDate.startsWith(month) && p.categoryId === cardCat.id && p.isGenerated === true);
+            invoices.push({ 
+                id: persisted ? persisted.id : `gen_card_${month}`, 
+                amount: val, 
+                type: 'expense', 
+                categoryId: cardCat.id, 
+                description: persisted ? persisted.description : `Faturas de Cartão - ${month}`, 
+                dueDate: persisted ? persisted.dueDate : `${month}-10`, 
+                status: persisted ? persisted.status : 'pending', 
+                isGenerated: true 
+            });
         });
         return invoices;
     }, [cardTransactions, categories, plannedTransactions]);
+
+    const getMonthlySummary = useCallback((date: Date) => {
+        const mPrefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthTxs = transactions.filter(t => t.date.startsWith(mPrefix));
+        const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+        const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+        return { income, expense };
+    }, [transactions]);
 
     const addCategory = async (cat: Omit<Category, 'id'>) => {
         const newCat = { ...cat, id: generateUUID() };
@@ -278,22 +312,17 @@ export const useFinanceData = () => {
         addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
         markPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             await addTransaction({ amount: planned.amount, categoryId: planned.categoryId, date: planned.dueDate, description: planned.description, type: planned.type });
-            const paidItem: PlannedTransaction = { ...planned, status: 'paid' };
-            setPlannedTransactions(prev => {
-                const exists = prev.find(t => t.id === planned.id);
-                return exists ? prev.map(t => t.id === planned.id ? paidItem : t) : [...prev, paidItem];
-            });
-            await syncItem('planned_transactions', paidItem);
-        },
-        unmarkPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
-            const pendingItem: PlannedTransaction = { ...planned, status: 'pending' };
-            if (planned.id.startsWith('gen_')) {
+            // Se o item tinha um ID real no banco (persisted ghost), removemos ele para não duplicar com a transação real
+            if (!String(planned.id).startsWith('gen_')) {
                 setPlannedTransactions(prev => prev.filter(t => t.id !== planned.id));
                 await syncItem('planned_transactions', { id: planned.id }, 'delete');
-            } else {
-                setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? pendingItem : t));
-                await syncItem('planned_transactions', pendingItem);
             }
+        },
+        unmarkPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
+            if (String(planned.id).startsWith('gen_')) return;
+            const pendingItem: PlannedTransaction = { ...planned, status: 'pending' };
+            setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? pendingItem : t));
+            await syncItem('planned_transactions', pendingItem);
         },
         addCategory, updateCategory, deleteCategory,
         generatedCardInvoices, generatedTithing,
