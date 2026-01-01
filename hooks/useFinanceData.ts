@@ -139,7 +139,6 @@ export const useFinanceData = () => {
         if (!updateFuture) {
             let finalTx = { ...tx };
             if (String(tx.id).startsWith('gen_')) {
-                // Se for um gerado, ao editar ele vira um planejado real no banco
                 finalTx.id = generateUUID();
                 finalTx.isGenerated = true;
                 setPlannedTransactions(prev => [...prev, finalTx]);
@@ -179,7 +178,6 @@ export const useFinanceData = () => {
         }
     };
 
-    // Fix: Added missing getMonthlySummary implementation
     const getMonthlySummary = useCallback((date: Date) => {
         const monthPrefix = date.toISOString().slice(0, 7);
         const monthTxs = transactions.filter(t => t.date.startsWith(monthPrefix));
@@ -202,7 +200,6 @@ export const useFinanceData = () => {
         const totalExpenses = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
         const totalIncomes = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
         
-        // Se não houve gastos nem entradas, não mostramos nada
         if (totalExpenses === 0 && totalIncomes === 0) return [];
 
         const remainingBalance = totalExpenses - totalIncomes;
@@ -296,7 +293,6 @@ export const useFinanceData = () => {
         return invoices;
     }, [cardTransactions, categories, plannedTransactions, transactions]);
 
-    // Fix: Added missing addCategory, updateCategory, deleteCategory implementations
     const addCategory = async (cat: Omit<Category, 'id'>) => {
         const newCat = { ...cat, id: generateUUID() };
         setCategories(prev => [...prev, newCat]);
@@ -319,10 +315,16 @@ export const useFinanceData = () => {
         addTransaction, updateTransaction, deleteTransaction, 
         addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
         markPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
-            // Cria a transação real
-            await addTransaction({ amount: planned.amount, categoryId: planned.categoryId, date: planned.dueDate, description: planned.description, type: planned.type });
+            // USAR DATA DE HOJE NA BAIXA
+            const todayISO = new Date().toISOString().split('T')[0];
+            await addTransaction({ 
+                amount: planned.amount, 
+                categoryId: planned.categoryId, 
+                date: todayISO, 
+                description: planned.description, 
+                type: planned.type 
+            });
             
-            // Atualiza o item planejado para 'paid' em vez de deletar
             if (!String(planned.id).startsWith('gen_')) {
                 const paidPlanned = { ...planned, status: 'paid' as const };
                 setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? paidPlanned : t));
@@ -331,6 +333,18 @@ export const useFinanceData = () => {
         },
         unmarkPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             if (String(planned.id).startsWith('gen_')) return;
+            
+            // Tenta encontrar a transação real correspondente para removê-la (independente da data ser a do vencimento ou hoje)
+            const matchingTx = transactions.find(t => 
+                t.amount === planned.amount && 
+                t.categoryId === planned.categoryId && 
+                t.description === planned.description
+            );
+            
+            if (matchingTx) {
+                await deleteTransaction(matchingTx.id);
+            }
+
             const pendingItem: PlannedTransaction = { ...planned, status: 'pending' as const };
             setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? pendingItem : t));
             await syncItem('planned_transactions', pendingItem);

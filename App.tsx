@@ -131,7 +131,6 @@ const App: React.FC = () => {
     const { transaction, recurrenceCount } = data;
     try {
       if ('id' in transaction) { 
-        // Verificamos se há futuros antes de editar
         const target = plannedTransactions.find(t => t.id === (transaction as PlannedTransaction).id);
         const futures = plannedTransactions.filter(t => 
             t.id !== target?.id && t.description === target?.description && t.categoryId === target?.categoryId && t.dueDate > target?.dueDate
@@ -204,8 +203,6 @@ const App: React.FC = () => {
 
   const combinedPlannedTransactions = useMemo(() => {
       const baseList = [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement];
-      
-      // Aplicar Lógica de Meta (Budget Goal)
       return baseList.map(pt => {
           if (pt.isBudgetGoal && pt.status === 'pending') {
               const spentInCategory = filteredTransactions
@@ -220,31 +217,35 @@ const App: React.FC = () => {
   }, [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement, filteredTransactions]);
 
   const currentMonthRealizedBalance = useMemo(() => {
-    const lastDayOfFilteredMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).toISOString().split('T')[0];
+    const todayISO = new Date().toISOString().split('T')[0];
     return transactions
-        .filter(tx => tx.date <= lastDayOfFilteredMonth)
+        .filter(tx => tx.date <= todayISO)
         .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0);
-  }, [transactions, displayDate]);
+  }, [transactions]);
 
   const balanceChartData = useMemo(() => {
+    const todayISO = new Date().toISOString().split('T')[0];
     const firstDayOfMonthISO = `${monthPrefix}-01`;
+    
+    // Saldo inicial do mês: tudo o que aconteceu antes do dia 1 deste mês
     const startBalance = transactions
         .filter(tx => tx.date < firstDayOfMonthISO)
         .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
 
-    const dailyChanges = new Map<number, number>();
+    const dailyRealChanges = new Map<number, number>();
     filteredTransactions.forEach(tx => {
         const day = parseInt(tx.date.split('-')[2], 10);
         const change = tx.type === 'income' ? tx.amount : -tx.amount;
-        dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
+        dailyRealChanges.set(day, (dailyRealChanges.get(day) || 0) + change);
     });
 
+    const dailyProjectedChanges = new Map<number, number>();
     combinedPlannedTransactions
         .filter(pt => pt.status === 'pending')
         .forEach(pt => {
             const day = parseInt(pt.dueDate.split('-')[2], 10);
             const change = pt.type === 'income' ? pt.amount : -pt.amount;
-            dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
+            dailyProjectedChanges.set(day, (dailyProjectedChanges.get(day) || 0) + change);
         });
 
     const daysInMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
@@ -252,16 +253,21 @@ const App: React.FC = () => {
     let runningBalance = startBalance;
 
     for (let day = 1; day <= daysInMonth; day++) {
-        runningBalance += dailyChanges.get(day) || 0;
+        const dayISO = `${monthPrefix}-${String(day).padStart(2, '0')}`;
+        
+        if (dayISO <= todayISO) {
+            // Histórico REAL
+            runningBalance += dailyRealChanges.get(day) || 0;
+        } else {
+            // PROJEÇÃO (apenas o que está pendente no futuro)
+            runningBalance += dailyProjectedChanges.get(day) || 0;
+        }
+        
         fullChartData.push({ date: `${String(day).padStart(2, '0')}`, balance: runningBalance });
     }
 
-    if (fullChartData.length <= 15) return fullChartData;
-    const dispData = [fullChartData[0]];
-    const step = 2;
-    for (let i = 1; i < fullChartData.length - 1; i += step) dispData.push(fullChartData[i]);
-    dispData.push(fullChartData[fullChartData.length - 1]);
-    return dispData;
+    // Retornar dados completos para o gráfico
+    return fullChartData;
   }, [transactions, filteredTransactions, combinedPlannedTransactions, monthPrefix, displayDate]);
 
   const pieChartData = useMemo(() => {

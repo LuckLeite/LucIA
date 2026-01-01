@@ -29,7 +29,7 @@ const PlannedTransactionListItem: React.FC<{
   const isGenerated = transaction.isGenerated;
 
   return (
-    <li className={`flex items-center justify-between p-3 sm:p-4 rounded-lg shadow-sm transition-all gap-2 sm:gap-4 ${isPaid ? 'bg-gray-100 dark:bg-slate-800 opacity-80' : 'bg-white dark:bg-slate-800'}`}>
+    <li className={`flex items-center justify-between p-3 sm:p-4 rounded-lg shadow-sm transition-all gap-2 sm:gap-4 ${isPaid ? 'bg-gray-100 dark:bg-slate-800 opacity-60 grayscale-[0.3]' : 'bg-white dark:bg-slate-800'}`}>
       <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
         {Icon && (
           <div className="p-1.5 sm:p-2 rounded-full flex-shrink-0" style={{ backgroundColor: `${category?.color}20` }}>
@@ -37,7 +37,7 @@ const PlannedTransactionListItem: React.FC<{
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className={`font-semibold text-gray-800 dark:text-gray-100 truncate text-[13px] sm:text-base ${isPaid && 'line-through decoration-gray-400'}`}>
+          <p className={`font-semibold text-gray-800 dark:text-gray-100 truncate text-[13px] sm:text-base ${isPaid && 'line-through decoration-gray-500 decoration-2'}`}>
             {transaction.description || category?.name}
           </p>
           <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
@@ -47,19 +47,19 @@ const PlannedTransactionListItem: React.FC<{
         </div>
       </div>
       <div className="flex items-center gap-1.5 sm:gap-4 flex-shrink-0 ml-1">
-        <span className={`font-bold text-xs sm:text-base whitespace-nowrap ${isIncome ? 'text-income' : 'text-expense'}`}>
+        <span className={`font-bold text-xs sm:text-base whitespace-nowrap ${isIncome ? 'text-income' : 'text-expense'} ${isPaid && 'opacity-70'}`}>
           {transaction.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </span>
         
         {!isPaid ? (
-            <button onClick={onMarkAsPaid} className="px-2 sm:px-3 py-1 text-[10px] sm:text-sm font-bold text-white bg-green-500 rounded-md hover:bg-green-600 uppercase transition-colors">
-                <span className="hidden sm:inline">Dar Baixa</span>
-                <span className="sm:hidden">Baixa</span>
+            <button onClick={onMarkAsPaid} className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-md shadow-sm flex items-center gap-1 uppercase transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:block"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Baixar</span>
             </button>
         ) : (
-            <button onClick={onUnmarkAsPaid} className="px-2 sm:px-3 py-1 text-[10px] sm:text-sm font-bold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-slate-700 rounded-md hover:bg-gray-300 dark:hover:bg-slate-600 uppercase transition-colors border border-gray-300 dark:border-slate-600">
-                <span className="hidden sm:inline">Tirar a baixa</span>
-                <span className="sm:hidden">Tirar baixa</span>
+            <button onClick={onUnmarkAsPaid} className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-md shadow-sm border border-gray-300 dark:border-slate-600 flex items-center gap-1 uppercase transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="hidden sm:block"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+                <span>Tirar baixa</span>
             </button>
         )}
 
