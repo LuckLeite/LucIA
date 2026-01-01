@@ -124,7 +124,8 @@ export const useFinanceData = () => {
                 ...tx,
                 id: generateUUID(),
                 dueDate: d.toISOString().split('T')[0],
-                status: 'pending'
+                status: 'pending',
+                isBudgetGoal: tx.isBudgetGoal || false
             };
             items.push(newItem);
         }
@@ -217,7 +218,8 @@ export const useFinanceData = () => {
             description: persisted ? persisted.description : isPaid ? `Saldo Movimento Concluído` : `Saldo Restante Movimento`,
             dueDate: persisted ? persisted.dueDate : firstDay,
             status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'),
-            isGenerated: true
+            isGenerated: true,
+            isBudgetGoal: false
         }];
     }, [transactions, categories, plannedTransactions]);
 
@@ -254,7 +256,8 @@ export const useFinanceData = () => {
                 description: persisted ? persisted.description : isPaid ? `Dízimo Pago - ${month}` : `Dízimo Restante - ${month}`, 
                 dueDate: persisted ? persisted.dueDate : `${month}-10`, 
                 status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
-                isGenerated: true 
+                isGenerated: true,
+                isBudgetGoal: false
             });
         });
         return items;
@@ -287,7 +290,8 @@ export const useFinanceData = () => {
                 description: persisted ? persisted.description : `Faturas de Cartão - ${month}`, 
                 dueDate: persisted ? persisted.dueDate : `${month}-10`, 
                 status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
-                isGenerated: true 
+                isGenerated: true,
+                isBudgetGoal: false
             });
         });
         return invoices;
@@ -334,7 +338,6 @@ export const useFinanceData = () => {
         unmarkPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             if (String(planned.id).startsWith('gen_')) return;
             
-            // Tenta encontrar a transação real correspondente para removê-la (independente da data ser a do vencimento ou hoje)
             const matchingTx = transactions.find(t => 
                 t.amount === planned.amount && 
                 t.categoryId === planned.categoryId && 

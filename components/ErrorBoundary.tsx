@@ -9,12 +9,16 @@ interface State {
   error?: Error;
 }
 
-// Fixed inheritance by using Component directly and declaring state as a class property to ensure properties are recognized by TypeScript.
+// Standard Error Boundary component implementation.
+// Using a constructor ensures that 'this.props' and 'this.state' are correctly recognized by the TypeScript compiler.
 class ErrorBoundary extends Component<Props, State> {
-  // Fix: Declared and initialized state as a class property to resolve existence errors on 'this.state'.
-  state: State = {
-    hasError: false
-  };
+  // Fix: Initializing state via constructor to satisfy strict type checking and ensure props inheritance.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false
+    };
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -25,7 +29,7 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    // Fix: Accessing state and props which are correctly typed via inheritance from Component<Props, State>.
+    // Correctly accessing state and props which are now properly typed via constructor initialization.
     const { hasError, error } = this.state;
     const { children } = this.props;
 

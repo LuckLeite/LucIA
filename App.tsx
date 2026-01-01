@@ -227,7 +227,6 @@ const App: React.FC = () => {
     const todayISO = new Date().toISOString().split('T')[0];
     const firstDayOfMonthISO = `${monthPrefix}-01`;
     
-    // Saldo inicial do mês: tudo o que aconteceu antes do dia 1 deste mês
     const startBalance = transactions
         .filter(tx => tx.date < firstDayOfMonthISO)
         .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
@@ -256,17 +255,14 @@ const App: React.FC = () => {
         const dayISO = `${monthPrefix}-${String(day).padStart(2, '0')}`;
         
         if (dayISO <= todayISO) {
-            // Histórico REAL
             runningBalance += dailyRealChanges.get(day) || 0;
         } else {
-            // PROJEÇÃO (apenas o que está pendente no futuro)
             runningBalance += dailyProjectedChanges.get(day) || 0;
         }
         
         fullChartData.push({ date: `${String(day).padStart(2, '0')}`, balance: runningBalance });
     }
 
-    // Retornar dados completos para o gráfico
     return fullChartData;
   }, [transactions, filteredTransactions, combinedPlannedTransactions, monthPrefix, displayDate]);
 
