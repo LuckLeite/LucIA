@@ -21,6 +21,7 @@ export interface PlannedTransaction {
   dueDate: string; // ISO string format for the due date
   status: 'pending' | 'paid';
   isGenerated?: boolean;
+  isBudgetGoal?: boolean; // Nova flag para metas
 }
 
 export interface CardTransaction {

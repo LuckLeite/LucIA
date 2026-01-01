@@ -17,6 +17,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [recurrenceCount, setRecurrenceCount] = useState('');
+  const [isBudgetGoal, setIsBudgetGoal] = useState(false);
 
   const filteredCategories = React.useMemo(() => categories.filter(c => c.type === type), [categories, type]);
 
@@ -27,6 +28,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setCategoryId(transactionToEdit.categoryId);
       setDueDate(parseDateAsUTC(transactionToEdit.dueDate).toISOString().split('T')[0]);
       setDescription(transactionToEdit.description);
+      setIsBudgetGoal(transactionToEdit.isBudgetGoal || false);
     } else {
       setAmount('');
       setType('expense');
@@ -34,6 +36,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setDueDate(new Date().toISOString().split('T')[0]);
       setDescription('');
       setRecurrenceCount('');
+      setIsBudgetGoal(false);
     }
   }, [transactionToEdit, categories]);
 
@@ -56,6 +59,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       categoryId,
       dueDate,
       description,
+      isBudgetGoal
     };
 
     if (transactionToEdit) {
@@ -69,11 +73,11 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <div className={`p-4 rounded-lg cursor-pointer text-center font-semibold ${type === 'expense' ? 'bg-expense text-white' : 'bg-gray-100 dark:bg-slate-700'}`}
+        <div className={`p-4 rounded-lg cursor-pointer text-center font-semibold transition-colors ${type === 'expense' ? 'bg-expense text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700'}`}
              onClick={() => setType('expense')}>
           Despesa
         </div>
-        <div className={`p-4 rounded-lg cursor-pointer text-center font-semibold ${type === 'income' ? 'bg-income text-white' : 'bg-gray-100 dark:bg-slate-700'}`}
+        <div className={`p-4 rounded-lg cursor-pointer text-center font-semibold transition-colors ${type === 'income' ? 'bg-income text-white shadow-md' : 'bg-gray-100 dark:bg-slate-700'}`}
              onClick={() => setType('income')}>
           Receita
         </div>
@@ -96,6 +100,20 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
           {filteredCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
         </select>
       </div>
+
+      <div className="flex items-center gap-2 p-3 bg-primary-50 dark:bg-slate-900/50 rounded-md border border-primary-100 dark:border-slate-700">
+          <input 
+            type="checkbox" 
+            id="isBudgetGoal" 
+            checked={isBudgetGoal} 
+            onChange={e => setIsBudgetGoal(e.target.checked)} 
+            className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+          />
+          <label htmlFor="isBudgetGoal" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+              Meta de Gasto? (Abater conforme as compras forem feitas)
+          </label>
+      </div>
+
       <div>
         <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data de Vencimento</label>
         <input type="date" id="dueDate" value={dueDate} onChange={e => setDueDate(e.target.value)} required
@@ -120,7 +138,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       )}
 
       <div className="flex justify-end pt-2">
-        <button type="submit" className="w-full bg-primary-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+        <button type="submit" className="w-full bg-primary-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
           {transactionToEdit ? 'Salvar Alterações' : 'Adicionar Planejamento'}
         </button>
       </div>

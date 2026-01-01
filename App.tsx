@@ -51,7 +51,9 @@ const App: React.FC = () => {
   const [investmentToEdit, setInvestmentToEdit] = useState<Investment | null>(null);
   
   const [isPlannedDeleteModalOpen, setPlannedDeleteModalOpen] = useState(false);
+  const [isPlannedEditCascadeModalOpen, setPlannedEditCascadeModalOpen] = useState(false);
   const [plannedDeletionTarget, setPlannedDeletionTarget] = useState<PlannedTransaction | null>(null);
+  const [plannedEditTarget, setPlannedEditTarget] = useState<PlannedTransaction | null>(null);
   const [hasFutureMatches, setHasFutureMatches] = useState(false);
 
   useEffect(() => {
@@ -128,10 +130,34 @@ const App: React.FC = () => {
   const handlePlannedFormSubmit = async (data: { transaction: Omit<PlannedTransaction, 'id' | 'status'> | PlannedTransaction, recurrenceCount: number }) => {
     const { transaction, recurrenceCount } = data;
     try {
-      if ('id' in transaction) { await updatePlannedTransaction(transaction as PlannedTransaction); } 
-      else { await addPlannedTransaction(transaction as Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount); }
-      setPlannedFormModalOpen(false);
+      if ('id' in transaction) { 
+        // Verificamos se há futuros antes de editar
+        const target = plannedTransactions.find(t => t.id === (transaction as PlannedTransaction).id);
+        const futures = plannedTransactions.filter(t => 
+            t.id !== target?.id && t.description === target?.description && t.categoryId === target?.categoryId && t.dueDate > target?.dueDate
+        );
+        if (futures.length > 0) {
+            setPlannedEditTarget(transaction as PlannedTransaction);
+            setPlannedEditCascadeModalOpen(true);
+        } else {
+            await updatePlannedTransaction(transaction as PlannedTransaction, false);
+            setPlannedFormModalOpen(false);
+        }
+      } 
+      else { 
+        await addPlannedTransaction(transaction as Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount); 
+        setPlannedFormModalOpen(false);
+      }
     } catch(e) { console.error(e) }
+  };
+
+  const handleConfirmEditPlanned = async (updateFuture: boolean) => {
+      if (plannedEditTarget) {
+          await updatePlannedTransaction(plannedEditTarget, updateFuture);
+          setPlannedEditCascadeModalOpen(false);
+          setPlannedEditTarget(null);
+          setPlannedFormModalOpen(false);
+      }
   };
 
   const handleAddCategoryClick = (type: 'income' | 'expense') => {
@@ -168,8 +194,6 @@ const App: React.FC = () => {
 
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
   
-  // FILTRO: Removemos qualquer item que tenha isGenerated: true da lista base vinda do banco.
-  // Isso evita que o registro "âncora" (usado só para salvar a data) apareça duplicado com o resultado do gerador dinâmico.
   const filteredPlannedTransactions = useMemo(() => 
     plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && !pt.isGenerated), 
   [plannedTransactions, monthPrefix]);
@@ -178,9 +202,22 @@ const App: React.FC = () => {
   const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
   const filteredMovement = useMemo(() => getGeneratedMovementForMonth(monthPrefix), [getGeneratedMovementForMonth, monthPrefix]);
 
-  const combinedPlannedTransactions = useMemo(() => 
-    [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement].sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
-  [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement]);
+  const combinedPlannedTransactions = useMemo(() => {
+      const baseList = [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement];
+      
+      // Aplicar Lógica de Meta (Budget Goal)
+      return baseList.map(pt => {
+          if (pt.isBudgetGoal && pt.status === 'pending') {
+              const spentInCategory = filteredTransactions
+                  .filter(t => t.categoryId === pt.categoryId && t.type === pt.type)
+                  .reduce((acc, curr) => acc + curr.amount, 0);
+              
+              const remaining = Math.max(0, pt.amount - spentInCategory);
+              return { ...pt, amount: remaining };
+          }
+          return pt;
+      }).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
+  }, [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement, filteredTransactions]);
 
   const currentMonthRealizedBalance = useMemo(() => {
     const lastDayOfFilteredMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).toISOString().split('T')[0];
@@ -255,11 +292,11 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6">
             <h1 className="text-2xl font-bold text-primary-600 dark:text-primary-400">Flux</h1>
             <nav className="hidden md:flex items-center gap-2">
-                <button onClick={() => setView('dashboard')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Dashboard</button>
-                <button onClick={() => setView('planned')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Planejados</button>
-                <button onClick={() => setView('cards')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Cartões</button>
-                <button onClick={() => setView('investments')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'investments' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Investimentos</button>
-                <button onClick={() => setView('categories')} className={`font-semibold px-3 py-1 rounded-md text-sm ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Categorias</button>
+                <button onClick={() => setView('dashboard')} className={`font-semibold px-3 py-1 rounded-md text-sm transition-colors ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Dashboard</button>
+                <button onClick={() => setView('planned')} className={`font-semibold px-3 py-1 rounded-md text-sm transition-colors ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Planejados</button>
+                <button onClick={() => setView('cards')} className={`font-semibold px-3 py-1 rounded-md text-sm transition-colors ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Cartões</button>
+                <button onClick={() => setView('investments')} className={`font-semibold px-3 py-1 rounded-md text-sm transition-colors ${view === 'investments' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Investimentos</button>
+                <button onClick={() => setView('categories')} className={`font-semibold px-3 py-1 rounded-md text-sm transition-colors ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'}`}>Categorias</button>
             </nav>
           </div>
           <div className="flex items-center gap-4">
@@ -292,7 +329,7 @@ const App: React.FC = () => {
                     currentBalance={currentMonthRealizedBalance}
                 />
                 <TransactionList transactions={filteredTransactions.slice(0, 5)} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onViewAll={() => setAllTransactionsModalOpen(true)} />
-                <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>
+                <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>
             </>
         )}
         {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} />}
@@ -307,7 +344,7 @@ const App: React.FC = () => {
             if (view === 'dashboard') handleAddTransactionClick();
             else if (view === 'planned') handleAddPlannedClick();
             else if (view === 'investments') handleAddInvestmentClick();
-        }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
+        }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2 transition-transform hover:scale-105">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             <span className="hidden sm:inline">Adicionar</span>
         </button>
@@ -321,8 +358,38 @@ const App: React.FC = () => {
       <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}><PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} /></Modal>
       <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}><CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} /></Modal>
       <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}><InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} /></Modal>
-      <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão"><div className="text-center p-4"><p className="mb-6">Deseja realmente apagar esta transação?</p><div className="flex justify-center gap-4"><button onClick={() => setConfirmModalOpen(false)} className="py-2 px-6 rounded-md bg-gray-200">Não</button><button onClick={handleConfirmDelete} className="py-2 px-6 rounded-md bg-red-600 text-white">Sim</button></div></div></Modal>
-      <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento"><div className="text-center p-4"><p>Excluir este item?</p><div className="flex justify-center gap-4 mt-6"><button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-4 bg-gray-200 rounded-md">Voltar</button><button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-4 bg-red-600 text-white rounded-md">Apenas este</button>{hasFutureMatches && <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-4 bg-red-800 text-white rounded-md">Este e futuros</button>}</div></div></Modal>
+      
+      <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão">
+          <div className="text-center p-4">
+              <p className="mb-6 text-gray-700 dark:text-gray-300">Deseja realmente apagar esta transação?</p>
+              <div className="flex justify-center gap-4">
+                  <button onClick={() => setConfirmModalOpen(false)} className="py-2 px-6 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold transition-colors">Não</button>
+                  <button onClick={handleConfirmDelete} className="py-2 px-6 rounded-md bg-red-600 text-white hover:bg-red-700 font-semibold transition-colors">Sim</button>
+              </div>
+          </div>
+      </Modal>
+
+      <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento">
+          <div className="text-center p-4">
+              <p className="mb-6 text-gray-700 dark:text-gray-300">Como deseja excluir este item planejado?</p>
+              <div className="flex flex-col sm:flex-row justify-center gap-3">
+                  <button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-6 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-md font-semibold transition-colors order-last sm:order-first">Voltar</button>
+                  <button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-md font-semibold transition-colors">Apenas este</button>
+                  {hasFutureMatches && <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-6 bg-red-600 text-white hover:bg-red-700 rounded-md font-semibold transition-colors">Este e futuros</button>}
+              </div>
+          </div>
+      </Modal>
+
+      <Modal isOpen={isPlannedEditCascadeModalOpen} onClose={() => setPlannedEditCascadeModalOpen(false)} title="Editar Planejamento">
+          <div className="text-center p-4">
+              <p className="mb-6 text-gray-700 dark:text-gray-300">Este planejamento possui repetições nos meses seguintes. Deseja aplicar as alterações neles também?</p>
+              <div className="flex flex-col sm:flex-row justify-center gap-3">
+                  <button onClick={() => setPlannedEditCascadeModalOpen(false)} className="py-2 px-6 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 rounded-md font-semibold transition-colors order-last sm:order-first">Voltar</button>
+                  <button onClick={() => handleConfirmEditPlanned(false)} className="py-2 px-6 bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 rounded-md font-semibold transition-colors">Apenas este</button>
+                  <button onClick={() => handleConfirmEditPlanned(true)} className="py-2 px-6 bg-primary-600 text-white hover:bg-primary-700 rounded-md font-semibold transition-colors">Este e futuros</button>
+              </div>
+          </div>
+      </Modal>
     </div>
   );
 };

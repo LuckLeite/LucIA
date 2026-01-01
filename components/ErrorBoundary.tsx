@@ -10,15 +10,12 @@ interface State {
   error?: Error;
 }
 
-// Fixed: Inherit from Component<Props, State> directly to ensure 'state' and 'props' are correctly typed.
+// Explicitly inherit from Component<Props, State> to ensure state and props are correctly typed.
 class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    // Initialize state properly.
-    this.state = {
-      hasError: false
-    };
-  }
+  // Use property initializer for state to avoid issues with constructor typing.
+  public state: State = {
+    hasError: false
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -29,8 +26,12 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
+    // Destructuring props and state to avoid direct 'this' property access issues in some environments.
+    const { hasError, error } = this.state;
+    const { children } = this.props;
+
     // Correctly access state with proper typing inherited from Component.
-    if (this.state.hasError) {
+    if (hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 p-4">
             <div className="text-center">
@@ -49,11 +50,11 @@ class ErrorBoundary extends Component<Props, State> {
                     Reload
                 </button>
                 {/* Safely access error property from state. */}
-                {this.state.error && (
+                {error && (
                     <details className="mt-4 text-left text-sm text-gray-500 dark:text-gray-500 w-full max-w-lg mx-auto">
                         <summary className="cursor-pointer">Error Details</summary>
                         <pre className="mt-2 p-2 bg-gray-100 dark:bg-slate-800 rounded text-xs whitespace-pre-wrap break-all">
-                            {this.state.error.toString()}
+                            {error.toString()}
                         </pre>
                     </details>
                 )}
@@ -63,7 +64,7 @@ class ErrorBoundary extends Component<Props, State> {
     }
 
     // Correctly access children from props.
-    return this.props.children;
+    return children;
   }
 }
 
