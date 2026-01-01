@@ -26,13 +26,8 @@ const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height
 const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
 const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 const ImportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 13V3"/><path d="m8 9 4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/></svg>;
-const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0 2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
 const LogoutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
-
-const parseDateAsUTC = (dateString: string) => {
-    const [year, month, day] = dateString.split('-').map(Number);
-    return new Date(Date.UTC(year, month - 1, day));
-};
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -45,14 +40,12 @@ const App: React.FC = () => {
   const [isAllTransactionsModalOpen, setAllTransactionsModalOpen] = useState(false);
   const [isPlannedFormModalOpen, setPlannedFormModalOpen] = useState(false);
   const [isImportModalOpen, setImportModalOpen] = useState(false);
-  const [isBulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
   const [isCategoryFormOpen, setCategoryFormOpen] = useState(false);
   const [isInvestmentFormOpen, setInvestmentFormOpen] = useState(false);
   
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [transactionToDeleteId, setTransactionToDeleteId] = useState<string | null>(null);
-  const [idsToDelete, setIdsToDelete] = useState<string[]>([]);
   const [plannedToEdit, setPlannedToEdit] = useState<PlannedTransaction | null>(null);
   const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
   const [investmentToEdit, setInvestmentToEdit] = useState<Investment | null>(null);
@@ -70,7 +63,7 @@ const App: React.FC = () => {
 
   const {
     transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
-    getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory,
+    getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory, getGeneratedMovementForMonth,
     plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
     cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
     investments, addInvestment, updateInvestment, deleteInvestment,
@@ -95,47 +88,21 @@ const App: React.FC = () => {
   
   const handleConfirmDelete = async () => {
     if (transactionToDeleteId) {
-      try {
-        await deleteTransaction(transactionToDeleteId);
-      } catch(e) { console.error(e) }
-      setTransactionToDeleteId(null);
-      setConfirmModalOpen(false);
+      try { await deleteTransaction(transactionToDeleteId); } catch(e) { console.error(e) }
+      setTransactionToDeleteId(null); setConfirmModalOpen(false);
     }
   };
 
   const handleFormSubmit = async (data: Omit<Transaction, 'id'> | Transaction) => {
-    try {
-      'id' in data ? await updateTransaction(data as Transaction) : await addTransaction(data);
-      setFormModalOpen(false);
-    } catch(e) { console.error(e) }
+    try { 'id' in data ? await updateTransaction(data as Transaction) : await addTransaction(data); setFormModalOpen(false); } catch(e) { console.error(e) }
   };
   
   const handleImportSubmit = async (importedTransactions: Omit<Transaction, 'id'>[]) => {
-    try {
-      await addMultipleTransactions(importedTransactions);
-      setImportModalOpen(false);
-    } catch(e) { console.error(e) }
-  };
-
-  const handleDeleteMultipleClick = (ids: string[]) => {
-      setIdsToDelete(ids);
-      setBulkConfirmOpen(true);
-  };
-
-  const handleConfirmBulkDelete = async () => {
-      if (idsToDelete.length > 0) {
-        try {
-          await deleteMultipleTransactions(idsToDelete);
-        } catch(e) { console.error(e) }
-      }
-      setIdsToDelete([]);
-      setBulkConfirmOpen(false);
+    try { await addMultipleTransactions(importedTransactions); setImportModalOpen(false); } catch(e) { console.error(e) }
   };
 
   const handleUpdateCategoryMultiple = async (ids: string[], categoryId: string) => {
-    try {
-      await updateMultipleTransactionsCategory(ids, categoryId);
-    } catch(e) { console.error(e) }
+    try { await updateMultipleTransactionsCategory(ids, categoryId); } catch(e) { console.error(e) }
   };
 
   const handleAddPlannedClick = () => { setPlannedToEdit(null); setPlannedFormModalOpen(true); };
@@ -143,66 +110,44 @@ const App: React.FC = () => {
   
   const handleRequestDeletePlanned = (id: string) => {
     const target = plannedTransactions.find(t => t.id === id);
-    if (!target) {
-        deletePlannedTransaction(id);
-        return;
-    }
+    if (!target) { deletePlannedTransaction(id); return; }
     setPlannedDeletionTarget(target);
     const futures = plannedTransactions.filter(t => 
-        t.id !== target.id &&
-        t.description === target.description &&
-        t.categoryId === target.categoryId &&
-        t.amount === target.amount &&
-        t.dueDate > target.dueDate
+        t.id !== target.id && t.description === target.description && t.categoryId === target.categoryId && t.dueDate > target.dueDate
     );
-    setHasFutureMatches(futures.length > 0);
-    setPlannedDeleteModalOpen(true);
+    setHasFutureMatches(futures.length > 0); setPlannedDeleteModalOpen(true);
   };
 
   const handleConfirmDeletePlanned = async (deleteFuture: boolean) => {
       if (plannedDeletionTarget) {
-          try {
-              await deletePlannedTransaction(plannedDeletionTarget.id, deleteFuture);
-          } catch(e) { console.error(e) }
-          setPlannedDeleteModalOpen(false);
-          setPlannedDeletionTarget(null);
+          try { await deletePlannedTransaction(plannedDeletionTarget.id, deleteFuture); } catch(e) { console.error(e) }
+          setPlannedDeleteModalOpen(false); setPlannedDeletionTarget(null);
       }
   };
 
   const handlePlannedFormSubmit = async (data: { transaction: Omit<PlannedTransaction, 'id' | 'status'> | PlannedTransaction, recurrenceCount: number }) => {
     const { transaction, recurrenceCount } = data;
     try {
-      if ('id' in transaction) {
-          await updatePlannedTransaction(transaction as PlannedTransaction);
-      } else {
-          await addPlannedTransaction(transaction as Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount);
-      }
+      if ('id' in transaction) { await updatePlannedTransaction(transaction as PlannedTransaction); } 
+      else { await addPlannedTransaction(transaction as Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount); }
       setPlannedFormModalOpen(false);
     } catch(e) { console.error(e) }
   };
 
   const handleAddCategoryClick = (type: 'income' | 'expense') => {
-      const currentCount = categories.filter(c => c.type === type).length;
-      if (currentCount >= 20) {
-          alert(`Limite de 20 categorias de ${type === 'income' ? 'receita' : 'despesa'} atingido.`);
-          return;
-      }
-      setCategoryToEdit(null);
-      setCategoryFormOpen(true);
+      setCategoryToEdit(null); setCategoryFormOpen(true);
   };
 
   const handleEditCategoryClick = (c: Category) => { setCategoryToEdit(c); setCategoryFormOpen(true); };
   const handleCategorySubmit = (data: Omit<Category, 'id'> | Category) => {
-    if ('id' in data) updateCategory(data as Category);
-    else addCategory(data);
+    if ('id' in data) updateCategory(data as Category); else addCategory(data);
     setCategoryFormOpen(false);
   };
 
   const handleAddInvestmentClick = () => { setInvestmentToEdit(null); setInvestmentFormOpen(true); };
   const handleEditInvestmentClick = (inv: Investment) => { setInvestmentToEdit(inv); setInvestmentFormOpen(true); };
   const handleInvestmentSubmit = (data: Omit<Investment, 'id'> | Investment) => {
-      if ('id' in data) updateInvestment(data as Investment);
-      else addInvestment(data);
+      if ('id' in data) updateInvestment(data as Investment); else addInvestment(data);
       setInvestmentFormOpen(false);
   };
   
@@ -215,64 +160,69 @@ const App: React.FC = () => {
      } catch(e) { console.error(e); }
   };
 
-  const handleInvestmentDelete = (id: string) => {
-      if (window.confirm("Deseja apagar este investimento?")) deleteInvestment(id);
-  };
+  const handleInvestmentDelete = (id: string) => { if (window.confirm("Deseja apagar este investimento?")) deleteInvestment(id); };
 
-  const uniqueInvestmentGroups = useMemo(() => {
-    const groups = new Set<string>();
-    investments.forEach(inv => { if (inv.group) groups.add(inv.group); });
-    return Array.from(groups);
-  }, [investments]);
+  const monthPrefix = useMemo(() => {
+    return `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}`;
+  }, [displayDate]);
 
-  const monthlySummary = useMemo(() => getMonthlySummary(displayDate), [getMonthlySummary, displayDate]);
-  const monthPrefix = useMemo(() => displayDate.toISOString().slice(0, 7), [displayDate]);
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
   
-  const accumulatedBalanceAtSelectedMonth = useMemo(() => {
-    const lastDayOfMonth = new Date(Date.UTC(displayDate.getUTCFullYear(), displayDate.getUTCMonth() + 1, 0, 23, 59, 59));
-    return transactions
-        .filter(tx => parseDateAsUTC(tx.date) <= lastDayOfMonth)
-        .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0);
-  }, [transactions, displayDate]);
-
   const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix)), [plannedTransactions, monthPrefix]);
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
   const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
-  const combinedPlannedTransactions = useMemo(() => 
-    [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing].sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
-  [filteredPlannedTransactions, filteredCardInvoices, filteredTithing]);
+  
+  // RESTAURAÇÃO: Banco de Movimento (Aparece apenas na aba Planejados)
+  const filteredMovement = useMemo(() => getGeneratedMovementForMonth(monthPrefix), [getGeneratedMovementForMonth, monthPrefix]);
 
+  const combinedPlannedTransactions = useMemo(() => 
+    [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement].sort((a,b) => a.dueDate.localeCompare(b.dueDate)),
+  [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement]);
+
+  // CORREÇÃO DO SALDO: Agora reflete apenas as transações REALIZADAS (Histórico total até o fim do mês filtrado)
+  const currentMonthActualBalance = useMemo(() => {
+    const lastDayOfFilteredMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).toISOString().split('T')[0];
+    
+    // Todas as transações realizadas (Receita - Despesa) desde o início dos tempos até o fim do mês atual
+    return transactions
+        .filter(tx => tx.date <= lastDayOfFilteredMonth)
+        .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0);
+  }, [transactions, displayDate]);
+
+  // CORREÇÃO DO GRÁFICO: Agora mostra a evolução do dinheiro REAL
   const balanceChartData = useMemo(() => {
-    const firstDayOfMonth = new Date(Date.UTC(displayDate.getFullYear(), displayDate.getMonth(), 1));
-    const balanceAtStartOfMonth = transactions
-        .filter(tx => parseDateAsUTC(tx.date) < firstDayOfMonth)
+    const firstDayOfMonthISO = `${monthPrefix}-01`;
+    
+    // Saldo acumulado de todo o histórico ANTES de começar este mês
+    const startBalance = transactions
+        .filter(tx => tx.date < firstDayOfMonthISO)
         .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
+
     const dailyChanges = new Map<number, number>();
+    
+    // Mudanças APENAS por transações REALIZADAS no mês
     filteredTransactions.forEach(tx => {
-        const day = parseDateAsUTC(tx.date).getUTCDate();
+        const day = parseInt(tx.date.split('-')[2], 10);
         const change = tx.type === 'income' ? tx.amount : -tx.amount;
         dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
     });
-    combinedPlannedTransactions.filter(pt => pt.status === 'pending').forEach(pt => {
-        const day = parseDateAsUTC(pt.dueDate).getUTCDate();
-        const change = pt.type === 'income' ? pt.amount : -pt.amount;
-        dailyChanges.set(day, (dailyChanges.get(day) || 0) + change);
-    });
+
     const daysInMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
     const fullChartData: { date: string; balance: number }[] = [];
-    let runningBalance = balanceAtStartOfMonth;
+    let runningBalance = startBalance;
+
     for (let day = 1; day <= daysInMonth; day++) {
         runningBalance += dailyChanges.get(day) || 0;
         fullChartData.push({ date: `${String(day).padStart(2, '0')}`, balance: runningBalance });
     }
-    if (fullChartData.length <= 12) return fullChartData;
-    const displayData: { date: string; balance: number }[] = [fullChartData[0]];
-    const step = Math.floor((fullChartData.length - 2) / 10);
-    for (let i = 1 + step; i < fullChartData.length - 1; i += step) displayData.push(fullChartData[i]);
-    displayData.push(fullChartData[fullChartData.length - 1]);
-    return displayData;
-  }, [transactions, filteredTransactions, combinedPlannedTransactions, displayDate]);
+
+    if (fullChartData.length <= 15) return fullChartData;
+    const dispData: { date: string; balance: number }[] = [fullChartData[0]];
+    const step = 2;
+    for (let i = 1; i < fullChartData.length - 1; i += step) dispData.push(fullChartData[i]);
+    dispData.push(fullChartData[fullChartData.length - 1]);
+    return dispData;
+  }, [transactions, filteredTransactions, monthPrefix, displayDate]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
@@ -281,39 +231,16 @@ const App: React.FC = () => {
             const category = categoryMap.get(t.categoryId);
             if (category) {
                 const existing = expenseByCategory.get(category.id) || { name: category.name, value: 0, color: category.color };
-                existing.value += t.amount;
-                expenseByCategory.set(category.id, existing);
+                existing.value += t.amount; expenseByCategory.set(category.id, existing);
             }
         });
     return Array.from(expenseByCategory.values());
   }, [filteredTransactions, categories]);
 
-  if (!supabase) return null;
-  if (!session) return <Auth />;
+  if (!supabase || !session) return <Auth />;
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900"><div className="animate-spin h-10 w-10 border-4 border-primary-500 border-t-transparent rounded-full" /></div>;
 
-  if (loading) return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900">
-            <svg className="animate-spin h-10 w-10 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-        </div>
-  );
-
-  const handleLogout = async () => {
-    if (supabase) {
-        await supabase.auth.signOut();
-    }
-    setSession(null);
-    window.location.reload();
-  };
-
-  const dashboardCombinedSummary = {
-      income: monthlySummary.income,
-      expense: monthlySummary.expense,
-      plannedIncome: combinedPlannedTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0),
-      plannedExpense: combinedPlannedTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0)
-  };
+  const handleLogout = async () => { if (supabase) await supabase.auth.signOut(); setSession(null); window.location.reload(); };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 flex flex-col">
@@ -332,169 +259,64 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
              {view !== 'cards' && view !== 'categories' && view !== 'investments' && (
                 <div className="flex items-center gap-2 text-lg font-semibold">
-                    <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mês anterior"><ChevronLeftIcon /></button>
-                    <span className="w-32 text-center capitalize text-sm sm:text-base">{displayDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</span>
-                    <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Próximo mês"><ChevronRightIcon /></button>
+                    <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeftIcon /></button>
+                    <span className="w-32 text-center capitalize text-sm sm:text-base">{displayDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}</span>
+                    <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronRightIcon /></button>
                 </div>
              )}
-             <button onClick={() => setImportModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Importar Extrato"><ImportIcon /></button>
-             <button onClick={() => setSettingsModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Configurações"><SettingsIcon /></button>
-             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Mudar tema">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</button>
-             <button onClick={handleLogout} className="p-2 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Sair"><LogoutIcon /></button>
+             <button onClick={() => setImportModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ImportIcon /></button>
+             <button onClick={() => setSettingsModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><SettingsIcon /></button>
+             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</button>
+             <button onClick={handleLogout} className="p-2 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><LogoutIcon /></button>
           </div>
-        </div>
-        <div className="md:hidden flex justify-around p-2 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-900 overflow-x-auto">
-             <button onClick={() => setView('dashboard')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'dashboard' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Dashboard</button>
-             <button onClick={() => setView('planned')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'planned' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Planejados</button>
-             <button onClick={() => setView('cards')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'cards' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Cartões</button>
-             <button onClick={() => setView('investments')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'investments' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Investimentos</button>
-             <button onClick={() => setView('categories')} className={`text-xs font-semibold px-2 py-1 rounded-md whitespace-nowrap ${view === 'categories' ? 'text-primary-600 bg-primary-100 dark:text-primary-300 dark:bg-slate-700' : 'text-gray-500'}`}>Categorias</button>
         </div>
       </header>
       
       <main className="max-w-6xl mx-auto pb-20 w-full flex-grow">
-        {error && (
-            <div className="m-4 p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="font-bold">Aviso:</p>
-                <p className="text-sm break-words">{error}</p>
-            </div>
-        )}
+        {error && <div className="m-4 p-4 bg-red-100 text-red-700 border rounded-lg">{error}</div>}
         {view === 'dashboard' && (
             <>
                 <Dashboard 
                     categories={categories}
-                    monthlyIncome={dashboardCombinedSummary.income}
-                    monthlyExpense={dashboardCombinedSummary.expense}
-                    monthlyPlannedExpense={dashboardCombinedSummary.plannedExpense}
-                    monthlyPlannedIncome={dashboardCombinedSummary.plannedIncome}
+                    monthlyIncome={getMonthlySummary(displayDate).income}
+                    monthlyExpense={getMonthlySummary(displayDate).expense}
+                    monthlyPlannedExpense={combinedPlannedTransactions.filter(t => t.type === 'expense' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0)}
+                    monthlyPlannedIncome={combinedPlannedTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0)}
                     balanceChartData={balanceChartData}
-                    currentBalance={accumulatedBalanceAtSelectedMonth}
+                    currentBalance={currentMonthActualBalance}
                 />
-                <TransactionList 
-                  transactions={filteredTransactions.slice(0, 5)} 
-                  categories={categories}
-                  onEdit={handleEditTransactionClick}
-                  onDelete={handleDeleteTransactionClick}
-                  onDuplicate={duplicateTransaction}
-                  onViewAll={() => setAllTransactionsModalOpen(true)}
-                />
-                <div className="p-4 sm:p-6">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Despesas por Categoria</h3>
-                        <CategoryPieChart data={pieChartData} />
-                    </div>
-                </div>
+                <TransactionList transactions={filteredTransactions.slice(0, 5)} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onViewAll={() => setAllTransactionsModalOpen(true)} />
+                <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>
             </>
         )}
-        {view === 'planned' && (
-            <PlannedTransactionList
-                plannedTransactions={combinedPlannedTransactions}
-                categories={categories}
-                onAdd={handleAddPlannedClick}
-                onEdit={handleEditPlannedClick}
-                onDelete={handleRequestDeletePlanned}
-                onMarkAsPaid={markPlannedTransactionAsPaid}
-                onUnmarkAsPaid={unmarkPlannedTransactionAsPaid}
-            />
-        )}
-        {view === 'cards' && (
-            <CardView 
-                transactions={cardTransactions}
-                onAdd={addCardTransaction}
-                onUpdate={updateCardTransaction}
-                onDelete={deleteCardTransaction}
-            />
-        )}
-        {view === 'investments' && (
-             <InvestmentView 
-                investments={investments}
-                onEdit={handleEditInvestmentClick}
-                onDelete={handleInvestmentDelete}
-                onBulkUpdate={handleBulkInvestmentUpdate}
-             />
-        )}
-        {view === 'categories' && (
-            <CategoryList 
-                categories={categories} 
-                onEdit={handleEditCategoryClick} 
-                onDelete={deleteCategory}
-                onAdd={handleAddCategoryClick}
-            />
-        )}
+        {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} />}
+        {view === 'cards' && <CardView transactions={cardTransactions} onAdd={addCardTransaction} onUpdate={updateCardTransaction} onDelete={deleteCardTransaction} />}
+        {view === 'investments' && <InvestmentView investments={investments} onEdit={handleEditInvestmentClick} onDelete={handleInvestmentDelete} onBulkUpdate={handleBulkInvestmentUpdate} />}
+        {view === 'categories' && <CategoryList categories={categories} onEdit={handleEditCategoryClick} onDelete={deleteCategory} onAdd={handleAddCategoryClick} />}
       </main>
       <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">Developed By Lucas Leite 🥛</footer>
       
-      {view !== 'cards' && view !== 'categories' && (
-        <div className="fixed bottom-6 right-6 z-30">
-            <button onClick={() => {
-                if (view === 'dashboard') handleAddTransactionClick();
-                else if (view === 'planned') handleAddPlannedClick();
-                else if (view === 'investments') handleAddInvestmentClick();
-            }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span className="hidden sm:inline">
-                    {view === 'dashboard' ? 'Nova Transação' : view === 'planned' ? 'Novo Planejado' : view === 'investments' ? 'Novo Investimento' : ''}
-                </span>
-            </button>
-        </div>
-      )}
+      <div className="fixed bottom-6 right-6 z-30">
+        <button onClick={() => {
+            if (view === 'dashboard') handleAddTransactionClick();
+            else if (view === 'planned') handleAddPlannedClick();
+            else if (view === 'investments') handleAddInvestmentClick();
+        }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span className="hidden sm:inline">Adicionar</span>
+        </button>
+      </div>
       <FloatingCalculator />
 
-      <AllTransactionsModal
-        isOpen={isAllTransactionsModalOpen}
-        onClose={() => setAllTransactionsModalOpen(false)}
-        transactions={filteredTransactions}
-        categories={categories}
-        onEdit={handleEditTransactionClick}
-        onDelete={handleDeleteTransactionClick}
-        onDuplicate={duplicateTransaction}
-        onDeleteMultiple={handleDeleteMultipleClick}
-        onUpdateCategoryMultiple={handleUpdateCategoryMultiple}
-      />
+      <AllTransactionsModal isOpen={isAllTransactionsModalOpen} onClose={() => setAllTransactionsModalOpen(false)} transactions={filteredTransactions} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onDeleteMultiple={deleteMultipleTransactions} onUpdateCategoryMultiple={handleUpdateCategoryMultiple} />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
-      <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}>
-        <TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} />
-      </Modal>
-      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}>
-        <PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} />
-      </Modal>
-      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}>
-        <CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} />
-      </Modal>
-      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}>
-         <InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} existingGroups={uniqueInvestmentGroups} />
-      </Modal>
-      <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão">
-        <div className="text-gray-700 dark:text-gray-300 text-center p-4">
-          <p className="mb-6">Deseja realmente apagar esta transação?</p>
-          <div className="flex justify-center gap-4">
-            <button onClick={() => setConfirmModalOpen(false)} className="py-2 px-6 rounded-md bg-gray-200 dark:bg-slate-700">Não</button>
-            <button onClick={handleConfirmDelete} className="py-2 px-6 rounded-md bg-red-600 text-white">Sim, Apagar</button>
-          </div>
-        </div>
-      </Modal>
-      <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento">
-        <div className="text-gray-700 dark:text-gray-300 text-center p-4">
-            <p>Você deseja excluir este item planejado?</p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4 mt-6">
-                <button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700">Voltar</button>
-                <button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-4 rounded-md bg-red-600 text-white">Este Apenas</button>
-                {hasFutureMatches && (
-                    <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-4 rounded-md bg-red-800 text-white">Este e Futuros</button>
-                )}
-            </div>
-        </div>
-      </Modal>
-      <Modal isOpen={isBulkConfirmOpen} onClose={() => setBulkConfirmOpen(false)} title="Exclusão em Massa">
-            <div className="text-gray-700 dark:text-gray-300 text-center p-4">
-                <p className="mb-6">Apagar {idsToDelete.length} transações selecionadas?</p>
-                <div className="flex justify-center gap-4">
-                    <button onClick={() => setBulkConfirmOpen(false)} className="py-2 px-6 rounded-md bg-gray-200 dark:bg-slate-700">Não</button>
-                    <button onClick={handleConfirmBulkDelete} className="py-2 px-6 rounded-md bg-red-600 text-white">Sim, Apagar</button>
-                </div>
-            </div>
-        </Modal>
+      <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}><TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} /></Modal>
+      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}><PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} /></Modal>
+      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}><CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} /></Modal>
+      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}><InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} /></Modal>
+      <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão"><div className="text-center p-4"><p className="mb-6">Deseja realmente apagar esta transação?</p><div className="flex justify-center gap-4"><button onClick={() => setConfirmModalOpen(false)} className="py-2 px-6 rounded-md bg-gray-200">Não</button><button onClick={handleConfirmDelete} className="py-2 px-6 rounded-md bg-red-600 text-white">Sim</button></div></div></Modal>
+      <Modal isOpen={isPlannedDeleteModalOpen} onClose={() => setPlannedDeleteModalOpen(false)} title="Excluir Planejamento"><div className="text-center p-4"><p>Excluir este item?</p><div className="flex justify-center gap-4 mt-6"><button onClick={() => setPlannedDeleteModalOpen(false)} className="py-2 px-4 bg-gray-200 rounded-md">Voltar</button><button onClick={() => handleConfirmDeletePlanned(false)} className="py-2 px-4 bg-red-600 text-white rounded-md">Apenas este</button>{hasFutureMatches && <button onClick={() => handleConfirmDeletePlanned(true)} className="py-2 px-4 bg-red-800 text-white rounded-md">Este e futuros</button>}</div></div></Modal>
     </div>
   );
 };

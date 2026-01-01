@@ -7,7 +7,7 @@ import { INITIAL_CATEGORIES_TEMPLATE } from '../constants';
 const generateUUID = () => crypto.randomUUID();
 
 const DEFAULT_SETTINGS: AppSettings = {
-    calculateTithing: false, // Iniciar desligado conforme solicitado
+    calculateTithing: false,
 };
 
 export const useFinanceData = () => {
@@ -36,15 +36,10 @@ export const useFinanceData = () => {
                 await supabase.from(table).delete().eq('id', item.id);
             } else {
                 const { isGenerated, ...dataToSync } = item;
-                const { error: syncError } = await supabase.from(table).upsert({
-                    ...dataToSync,
-                    user_id: session.user.id
-                });
-                if (syncError) throw syncError;
+                await supabase.from(table).upsert({ ...dataToSync, user_id: session.user.id });
             }
         } catch (e: any) {
             console.error(`Erro ao sincronizar ${table}:`, e.message);
-            setError(`Erro de sincronização: ${e.message}`);
         }
     };
 
@@ -54,7 +49,6 @@ export const useFinanceData = () => {
             return;
         }
         setLoading(true);
-        setError(null);
         try {
             const [txs, pln, crd, inv, cat, bud, set] = await Promise.all([
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
@@ -66,17 +60,14 @@ export const useFinanceData = () => {
                 supabase.from('settings').select('*').single()
             ]);
 
-            // SEED AUTOMÁTICO PARA NOVOS USUÁRIOS
             if (cat.data && cat.data.length === 0) {
                 const seedCategories = INITIAL_CATEGORIES_TEMPLATE.map(c => ({
                     ...c,
                     id: generateUUID(),
                     user_id: session.user.id
                 }));
-                const { data: insertedCats, error: seedError } = await supabase.from('categories').insert(seedCategories).select();
-                if (!seedError && insertedCats) {
-                    setCategories(insertedCats);
-                }
+                const { data: insertedCats } = await supabase.from('categories').insert(seedCategories).select();
+                if (insertedCats) setCategories(insertedCats);
             } else if (cat.data) {
                 setCategories(cat.data);
             }
@@ -86,34 +77,15 @@ export const useFinanceData = () => {
             if (crd.data) setCardTransactions(crd.data);
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
-            if (set.data) setSettings(set.data);
-            setLoading(false);
+            if (set.data) setSettings(set.data || DEFAULT_SETTINGS);
         } catch (err: any) {
             console.error("Erro ao carregar dados:", err);
-            // Ignore single settings missing error for new users
-            if (err.code !== 'PGRST116') {
-                setError("Não foi possível carregar os dados.");
-            }
+        } finally {
             setLoading(false);
         }
     }, [session]);
 
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    const getMonthlySummary = useCallback((date: Date) => {
-        const monthPrefix = date.toISOString().slice(0, 7);
-        const monthTxs = transactions.filter(t => t.date.startsWith(monthPrefix));
-        const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-        const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-        
-        const monthPlannedManual = plannedTransactions.filter(t => t.dueDate.startsWith(monthPrefix) && t.status === 'pending');
-        const plannedIncome = monthPlannedManual.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-        const plannedExpense = monthPlannedManual.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-
-        return { income, expense, plannedIncome, plannedExpense };
-    }, [transactions, plannedTransactions]);
+    useEffect(() => { loadData(); }, [loadData]);
 
     const addTransaction = async (tx: Omit<Transaction, 'id'>) => {
         const newTx = { ...tx, id: generateUUID() };
@@ -131,47 +103,157 @@ export const useFinanceData = () => {
         await syncItem('transactions', { id }, 'delete');
     };
 
-    const addPlannedTransaction = async (pt: Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount: number = 0) => {
-        const newItems: PlannedTransaction[] = [];
-        const baseDate = new Date(pt.dueDate + 'T12:00:00Z');
-        
+    const addPlannedTransaction = async (tx: Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount: number = 0) => {
+        const items: PlannedTransaction[] = [];
+        const start = new Date(tx.dueDate + 'T12:00:00Z');
         for (let i = 0; i <= recurrenceCount; i++) {
-            const date = new Date(baseDate);
-            date.setUTCMonth(baseDate.getUTCMonth() + i);
-            newItems.push({
-                ...pt,
+            const d = new Date(start);
+            d.setUTCMonth(start.getUTCMonth() + i);
+            const newItem: PlannedTransaction = {
+                ...tx,
                 id: generateUUID(),
-                status: 'pending',
-                dueDate: date.toISOString().split('T')[0]
-            });
+                dueDate: d.toISOString().split('T')[0],
+                status: 'pending'
+            };
+            items.push(newItem);
         }
-        
-        setPlannedTransactions(prev => [...prev, ...newItems]);
+        setPlannedTransactions(prev => [...prev, ...items]);
         if (supabase && session) {
-            const dataToSync = newItems.map(item => ({ ...item, user_id: session.user.id }));
+            const dataToSync = items.map(it => ({ ...it, user_id: session.user.id }));
             await supabase.from('planned_transactions').upsert(dataToSync);
         }
     };
 
-    const updatePlannedTransaction = async (pt: PlannedTransaction) => {
-        setPlannedTransactions(prev => prev.map(t => t.id === pt.id ? pt : t));
-        await syncItem('planned_transactions', pt);
+    const updatePlannedTransaction = async (tx: PlannedTransaction) => {
+        setPlannedTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
+        await syncItem('planned_transactions', tx);
     };
 
     const deletePlannedTransaction = async (id: string, deleteFuture: boolean = false) => {
-        const target = plannedTransactions.find(t => t.id === id);
-        if (!target) return;
-
-        let idsToDelete = [id];
-        if (deleteFuture) {
-            idsToDelete = plannedTransactions
-                .filter(t => t.description === target.description && t.categoryId === target.categoryId && t.dueDate >= target.dueDate)
-                .map(t => t.id);
+        if (!deleteFuture) {
+            setPlannedTransactions(prev => prev.filter(t => t.id !== id));
+            await syncItem('planned_transactions', { id }, 'delete');
+        } else {
+            const target = plannedTransactions.find(t => t.id === id);
+            if (!target) return;
+            const toDelete = plannedTransactions.filter(t => 
+                t.description === target.description && t.categoryId === target.categoryId && t.dueDate >= target.dueDate
+            );
+            const ids = toDelete.map(t => t.id);
+            setPlannedTransactions(prev => prev.filter(t => !ids.includes(t.id)));
+            if (supabase) await supabase.from('planned_transactions').delete().in('id', ids);
         }
-
-        setPlannedTransactions(prev => prev.filter(t => !idsToDelete.includes(t.id)));
-        if (supabase) await supabase.from('planned_transactions').delete().in('id', idsToDelete);
     };
+
+    const getMonthlySummary = useCallback((date: Date) => {
+        const monthPrefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthTxs = transactions.filter(t => t.date.startsWith(monthPrefix));
+        const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
+        const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+        return { income, expense, balance: income - expense };
+    }, [transactions]);
+
+    // LÓGICA DO BANCO DE MOVIMENTO (RESTAURAÇÃO DE DEZEMBRO)
+    // Calcula o excedente de categorias "Movimento" de todo o histórico anterior ao mês visualizado.
+    const getGeneratedMovementForMonth = useCallback((monthPrefix: string) => {
+        if (categories.length === 0) return [];
+        
+        const movCategories = categories.filter(c => 
+            c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 'movimento'
+        );
+        if (movCategories.length === 0) return [];
+
+        const incomeIds = movCategories.filter(c => c.type === 'income').map(c => c.id);
+        const expenseIds = movCategories.filter(c => c.type === 'expense').map(c => c.id);
+        
+        // Data de início do mês atual (Ex: 2024-01-01)
+        const firstDayOfCurrentMonth = `${monthPrefix}-01`;
+        
+        // Filtra transações que ocorreram ANTES do mês atual
+        const historyTxs = transactions.filter(t => t.date < firstDayOfCurrentMonth);
+
+        // Depósitos (Gastos em Movimento) aumentam o banco. Saques (Receitas em Movimento) diminuem o banco.
+        const totalDeposits = historyTxs.filter(t => t.type === 'expense' && expenseIds.includes(t.categoryId)).reduce((acc, t) => acc + t.amount, 0);
+        const totalWithdrawals = historyTxs.filter(t => t.type === 'income' && incomeIds.includes(t.categoryId)).reduce((acc, t) => acc + t.amount, 0);
+        
+        const accumulatedBalance = totalDeposits - totalWithdrawals;
+        
+        if (accumulatedBalance <= 0) return [];
+
+        const movIncomeCat = movCategories.find(c => c.type === 'income');
+        if (!movIncomeCat) return [];
+
+        // ID fixado pelo mês para evitar duplicação total
+        const genId = `gen_mov_acc_${monthPrefix}`;
+        
+        // Verifica se JÁ EXISTE um item com esse ID ou mesma descrição para este mês exato
+        const alreadyExists = plannedTransactions.some(p => 
+            p.id === genId || 
+            (p.description === 'Saldo Acumulado Movimento' && p.dueDate.startsWith(monthPrefix))
+        );
+        
+        if (alreadyExists) return [];
+
+        return [{
+            id: genId,
+            amount: accumulatedBalance,
+            type: 'income' as const,
+            categoryId: movIncomeCat.id,
+            description: `Saldo Acumulado Movimento`,
+            dueDate: `${monthPrefix}-01`,
+            status: 'pending' as const,
+            isGenerated: true
+        }];
+    }, [transactions, categories, plannedTransactions]);
+
+    const generatedTithing = useMemo(() => {
+        if (!settings.calculateTithing || categories.length === 0) return [];
+        const tithingCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('dizimo')) && c.type === 'expense');
+        if (!tithingCat) return [];
+        const monthlyIncome = new Map<string, number>();
+        transactions.filter(t => t.type === 'income').forEach(t => {
+            const cat = categories.find(c => c.id === t.categoryId);
+            if (cat?.includeInTithing) {
+                const month = t.date.slice(0, 7);
+                monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + t.amount);
+            }
+        });
+        const items: PlannedTransaction[] = [];
+        monthlyIncome.forEach((income, month) => {
+            const genId = `gen_tithing_${month}`;
+            if (!plannedTransactions.some(p => p.id === genId)) {
+                items.push({ id: genId, amount: income * 0.1, type: 'expense', categoryId: tithingCat.id, description: `Dízimo Estimado - ${month}`, dueDate: `${month}-10`, status: 'pending', isGenerated: true });
+            }
+        });
+        return items;
+    }, [transactions, categories, settings.calculateTithing, plannedTransactions]);
+
+    const generatedCardInvoices = useMemo(() => {
+        if (categories.length === 0) return [];
+        const cardCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('cartao')) && c.type === 'expense');
+        if (!cardCat) return [];
+        const cardMonthlySum = new Map<string, number>();
+        cardTransactions.forEach(cardTx => {
+            const installmentValue = cardTx.totalAmount / cardTx.installments;
+            const start = new Date(cardTx.purchaseDate + 'T12:00:00Z');
+            for (let i = 1; i <= cardTx.installments; i++) {
+                const d = new Date(start);
+                d.setUTCMonth(start.getUTCMonth() + i);
+                const monthKey = d.toISOString().slice(0, 7);
+                const compositeKey = `${cardTx.card}|${monthKey}`;
+                cardMonthlySum.set(compositeKey, (cardMonthlySum.get(compositeKey) || 0) + installmentValue);
+            }
+        });
+        const invoices: PlannedTransaction[] = [];
+        cardMonthlySum.forEach((val, compositeKey) => {
+            const [cardName, month] = compositeKey.split('|');
+            const genId = `gen_card_${cardName}_${month}`;
+            if (!plannedTransactions.some(p => p.id === genId)) {
+                invoices.push({ id: genId, amount: val, type: 'expense', categoryId: cardCat.id, description: `Fatura ${cardName} - ${month}`, dueDate: `${month}-10`, status: 'pending', isGenerated: true });
+            }
+        });
+        return invoices;
+    }, [cardTransactions, categories, plannedTransactions]);
 
     const addCategory = async (cat: Omit<Category, 'id'>) => {
         const newCat = { ...cat, id: generateUUID() };
@@ -189,109 +271,17 @@ export const useFinanceData = () => {
         await syncItem('categories', { id }, 'delete');
     };
 
-    const generatedTithing = useMemo(() => {
-        if (!settings.calculateTithing || categories.length === 0) return [];
-        
-        const tithingCat = categories.find(c => 
-            (c.name.toLowerCase().includes('dizimo') || c.name.toLowerCase().includes('dízimo')) && 
-            c.type === 'expense'
-        );
-        if (!tithingCat) return [];
-
-        const monthlyIncome = new Map<string, number>();
-        transactions.filter(t => t.type === 'income').forEach(t => {
-            const cat = categories.find(c => c.id === t.categoryId);
-            if (cat?.includeInTithing) {
-                const month = t.date.slice(0, 7);
-                monthlyIncome.set(month, (monthlyIncome.get(month) || 0) + t.amount);
-            }
-        });
-
-        const items: PlannedTransaction[] = [];
-        monthlyIncome.forEach((income, month) => {
-            const genId = `gen_tithing_${month}`;
-            const isAlreadyPaid = plannedTransactions.some(p => p.id === genId && p.status === 'paid');
-            
-            if (!isAlreadyPaid) {
-                items.push({
-                    id: genId,
-                    amount: income * 0.1,
-                    type: 'expense',
-                    categoryId: tithingCat.id,
-                    description: `Dízimo Estimado - ${month}`,
-                    dueDate: `${month}-10`,
-                    status: 'pending',
-                    isGenerated: true
-                });
-            }
-        });
-        return items;
-    }, [transactions, categories, settings.calculateTithing, plannedTransactions]);
-
-    const generatedCardInvoices = useMemo(() => {
-        if (categories.length === 0) return [];
-        const cardCat = categories.find(c => 
-            (c.name.toLowerCase().includes('cartao') || c.name.toLowerCase().includes('cartão')) && 
-            c.type === 'expense'
-        );
-        if (!cardCat) return [];
-        
-        const cardMonthlySum = new Map<string, number>();
-        cardTransactions.forEach(cardTx => {
-            const installmentValue = cardTx.totalAmount / cardTx.installments;
-            const start = new Date(cardTx.purchaseDate + 'T12:00:00Z');
-            const cardName = cardTx.card || 'Cartão';
-
-            for (let i = 1; i <= cardTx.installments; i++) {
-                const d = new Date(start);
-                d.setUTCMonth(start.getUTCMonth() + i);
-                const monthKey = d.toISOString().slice(0, 7);
-                const compositeKey = `${cardName}|${monthKey}`;
-                cardMonthlySum.set(compositeKey, (cardMonthlySum.get(compositeKey) || 0) + installmentValue);
-            }
-        });
-
-        const invoices: PlannedTransaction[] = [];
-        cardMonthlySum.forEach((val, compositeKey) => {
-            const [cardName, month] = compositeKey.split('|');
-            const genId = `gen_card_${cardName}_${month}`;
-            const isAlreadyPaid = plannedTransactions.some(p => p.id === genId && p.status === 'paid');
-
-            if (!isAlreadyPaid) {
-                invoices.push({
-                    id: genId,
-                    amount: val,
-                    type: 'expense',
-                    categoryId: cardCat.id,
-                    description: `Fatura ${cardName} - ${month}`,
-                    dueDate: `${month}-10`,
-                    status: 'pending',
-                    isGenerated: true
-                });
-            }
-        });
-        return invoices;
-    }, [cardTransactions, categories, plannedTransactions]);
-
     return {
         transactions, categories, budgets, plannedTransactions, cardTransactions, investments, settings, loading, error,
-        getMonthlySummary,
+        getMonthlySummary, getGeneratedMovementForMonth,
         addTransaction, updateTransaction, deleteTransaction, 
         addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
         markPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
-            await addTransaction({ 
-                amount: planned.amount, 
-                categoryId: planned.categoryId, 
-                date: planned.dueDate, 
-                description: planned.description, 
-                type: planned.type 
-            });
-
+            await addTransaction({ amount: planned.amount, categoryId: planned.categoryId, date: planned.dueDate, description: planned.description, type: planned.type });
             const paidItem: PlannedTransaction = { ...planned, status: 'paid' };
             setPlannedTransactions(prev => {
                 const exists = prev.find(t => t.id === planned.id);
-                if (exists) return prev.map(t => t.id === planned.id ? paidItem : t);
-                return [...prev, paidItem];
+                return exists ? prev.map(t => t.id === planned.id ? paidItem : t) : [...prev, paidItem];
             });
             await syncItem('planned_transactions', paidItem);
         },
@@ -306,26 +296,16 @@ export const useFinanceData = () => {
             }
         },
         addCategory, updateCategory, deleteCategory,
-        generatedCardInvoices,
-        generatedTithing,
+        generatedCardInvoices, generatedTithing,
         totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0),
         updateSettings: async (s: AppSettings) => {
             setSettings(s);
-            if (supabase && session) {
-                await supabase.from('settings').upsert({
-                    ...s,
-                    id: 'global',
-                    user_id: session.user.id
-                });
-            }
+            if (supabase && session) await supabase.from('settings').upsert({ ...s, id: 'global', user_id: session.user.id });
         },
         addMultipleTransactions: async (txs: Omit<Transaction, 'id'>[]) => {
             const newTxs = txs.map(t => ({ ...t, id: generateUUID() }));
             setTransactions(prev => [...newTxs, ...prev]);
-            if (supabase && session) {
-                const dataWithUid = newTxs.map(t => ({ ...t, user_id: session.user.id }));
-                await supabase.from('transactions').upsert(dataWithUid);
-            }
+            if (supabase && session) await supabase.from('transactions').upsert(newTxs.map(t => ({ ...t, user_id: session.user.id })));
         },
         deleteMultipleTransactions: async (ids: string[]) => {
             setTransactions(prev => prev.filter(t => !ids.includes(t.id)));
@@ -337,10 +317,7 @@ export const useFinanceData = () => {
         },
         duplicateTransaction: async (id: string) => {
             const original = transactions.find(t => t.id === id);
-            if (original) {
-                const { id: _, ...data } = original;
-                await addTransaction(data);
-            }
+            if (original) { const { id: _, ...data } = original; await addTransaction(data); }
         },
         addCardTransaction: async (tx: Omit<CardTransaction, 'id'>) => {
             const newTx = { ...tx, id: generateUUID() };
@@ -371,11 +348,7 @@ export const useFinanceData = () => {
         exportData: () => {
             const data = { transactions, plannedTransactions, cardTransactions, investments, categories, settings };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `flux_backup_${new Date().toISOString().split('T')[0]}.json`;
-            a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `flux_backup.json`; a.click();
         },
         importData: async (j: string) => {
             try {
@@ -390,31 +363,19 @@ export const useFinanceData = () => {
         },
         clearAllData: async () => {
             if (!supabase || !session) return;
-            const userId = session.user.id;
             try {
                 setLoading(true);
                 await Promise.all([
-                    supabase.from('transactions').delete().eq('user_id', userId),
-                    supabase.from('planned_transactions').delete().eq('user_id', userId),
-                    supabase.from('card_transactions').delete().eq('user_id', userId),
-                    supabase.from('investments').delete().eq('user_id', userId),
-                    supabase.from('categories').delete().eq('user_id', userId),
-                    supabase.from('budgets').delete().eq('user_id', userId),
-                    supabase.from('settings').delete().eq('user_id', userId),
+                    supabase.from('transactions').delete().eq('user_id', session.user.id),
+                    supabase.from('planned_transactions').delete().eq('user_id', session.user.id),
+                    supabase.from('card_transactions').delete().eq('user_id', session.user.id),
+                    supabase.from('investments').delete().eq('user_id', session.user.id),
+                    supabase.from('categories').delete().eq('user_id', session.user.id),
+                    supabase.from('settings').delete().eq('user_id', session.user.id),
                 ]);
-                setTransactions([]);
-                setPlannedTransactions([]);
-                setCardTransactions([]);
-                setInvestments([]);
-                setCategories([]);
-                setSettings(DEFAULT_SETTINGS);
-                await loadData(); // Reload will re-seed categories
-            } catch (e) {
-                console.error("Erro ao resetar dados:", e);
-                setError("Erro ao apagar dados do servidor.");
-            } finally {
-                setLoading(false);
-            }
+                setTransactions([]); setPlannedTransactions([]); setCardTransactions([]); setInvestments([]); setCategories([]); setSettings(DEFAULT_SETTINGS);
+                await loadData();
+            } catch (e) { console.error("Erro ao resetar dados:", e); } finally { setLoading(false); }
         }
     };
 };

@@ -42,7 +42,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
     };
 
     const handleClearClick = () => {
-        if(window.confirm("Tem certeza que deseja apagar TODOS os seus dados salvos? Seus lançamentos, cartões e categorias personalizadas serão excluídos permanentemente.")) {
+        if(window.confirm("Tem certeza que deseja apagar TODOS os seus dados salvos? Seus lançamentos, cartões e categorias personalizadas serão excluídos permanentemente. Seu usuário continuará existindo.")) {
             clearAllData();
             onClose();
         }
@@ -83,8 +83,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100 border-b dark:border-slate-700 pb-2">Dados</h3>
                     
                     <div className="flex flex-col gap-2">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Utilize os botões abaixo para gerenciar backups manuais dos seus dados.</p>
-                        
                         <div className="flex gap-3 mt-2">
                             <button 
                                 onClick={exportData}
@@ -117,16 +115,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
                          <h3 className="font-semibold text-red-600 dark:text-red-400 mb-2">Zona de Perigo</h3>
                          <button 
                             onClick={handleClearClick}
-                            className="w-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 font-semibold py-2 px-4 rounded flex items-center justify-center gap-2"
+                            className="w-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 font-semibold py-2 px-4 rounded flex items-center justify-center gap-2 transition-colors"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                            Apagar Tudo (Limpar Conta)
+                            Apagar Tudo (Resetar Conta)
                         </button>
                     </div>
                 </div>
 
                 <div className="flex justify-end pt-2">
-                    <button onClick={onClose} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200">Fechar</button>
+                    <button onClick={onClose} className="py-2 px-4 rounded-md bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-800 dark:text-gray-200 transition-colors">Fechar</button>
                 </div>
             </div>
         </Modal>
