@@ -1,7 +1,6 @@
-
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import type { Transaction, PlannedTransaction, CardTransaction, Category, AppSettings, Investment, Budget } from '../types';
+import type { Transaction, PlannedTransaction, CardTransaction, CardRegistry, Category, AppSettings, Investment, Budget } from '../types';
 import { INITIAL_CATEGORIES_TEMPLATE } from '../constants';
 
 const generateUUID = () => crypto.randomUUID();
@@ -24,6 +23,7 @@ export const useFinanceData = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [plannedTransactions, setPlannedTransactions] = useState<PlannedTransaction[]>([]);
     const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
+    const [cardRegistries, setCardRegistries] = useState<CardRegistry[]>([]);
     const [investments, setInvestments] = useState<Investment[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -62,10 +62,11 @@ export const useFinanceData = () => {
         }
         setLoading(true);
         try {
-            const [txs, pln, crd, inv, cat, bud, set] = await Promise.all([
+            const [txs, pln, crd, creg, inv, cat, bud, set] = await Promise.all([
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
                 supabase.from('planned_transactions').select('*'),
                 supabase.from('card_transactions').select('*'),
+                supabase.from('card_registries').select('*'),
                 supabase.from('investments').select('*'),
                 supabase.from('categories').select('*'),
                 supabase.from('budgets').select('*'),
@@ -87,6 +88,7 @@ export const useFinanceData = () => {
             if (txs.data) setTransactions(txs.data);
             if (pln.data) setPlannedTransactions(pln.data || []);
             if (crd.data) setCardTransactions(crd.data);
+            if (creg.data) setCardRegistries(creg.data || []);
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
             if (set.data) setSettings(set.data || DEFAULT_SETTINGS);
@@ -256,7 +258,7 @@ export const useFinanceData = () => {
                 description: persisted ? persisted.description : isPaid ? `Dízimo Pago - ${month}` : `Dízimo Restante - ${month}`, 
                 dueDate: persisted ? persisted.dueDate : `${month}-10`, 
                 status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
-                isGenerated: true,
+                isGenerated: true, 
                 isBudgetGoal: false
             });
         });
@@ -267,35 +269,61 @@ export const useFinanceData = () => {
         if (categories.length === 0) return [];
         const cardCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('cartao')) && c.type === 'expense');
         if (!cardCat) return [];
+        
         const invoices: PlannedTransaction[] = [];
-        const cardMonths = new Map<string, number>();
+        const cardGroups = new Map<string, number>();
+
         cardTransactions.forEach(tx => {
+            const cardName = tx.card || 'Sem Nome';
             const monthly = tx.totalAmount / tx.installments;
             const start = new Date(tx.purchaseDate + 'T12:00:00Z');
+            
             for (let i = 1; i <= tx.installments; i++) {
                 const d = addMonthsWithEndOfMonthCheck(start, i);
                 const mKey = d.toISOString().slice(0, 7);
-                cardMonths.set(mKey, (cardMonths.get(mKey) || 0) + monthly);
+                const compositeKey = `${cardName}@@@${mKey}`;
+                cardGroups.set(compositeKey, (cardGroups.get(compositeKey) || 0) + monthly);
             }
         });
-        cardMonths.forEach((val, month) => {
-            const alreadyPaidReal = transactions.filter(t => t.date.startsWith(month) && t.categoryId === cardCat.id).reduce((acc, t) => acc + t.amount, 0);
+
+        cardGroups.forEach((val, compositeKey) => {
+            const [cardName, month] = compositeKey.split('@@@');
+            const description = `Fatura ${cardName} - ${month}`;
+            
+            const alreadyPaidReal = transactions.filter(t => 
+                t.date.startsWith(month) && 
+                t.categoryId === cardCat.id && 
+                t.description.includes(cardName)
+            ).reduce((acc, t) => acc + t.amount, 0);
+
             const isPaid = alreadyPaidReal >= (val - 0.01);
-            const persisted = plannedTransactions.find(p => p.dueDate.startsWith(month) && p.categoryId === cardCat.id && p.isGenerated === true);
+            
+            const persisted = plannedTransactions.find(p => 
+                p.dueDate.startsWith(month) && 
+                p.categoryId === cardCat.id && 
+                p.description === description &&
+                p.isGenerated === true
+            );
+
+            // Obter dia de vencimento cadastrado
+            const reg = cardRegistries.find(r => r.name.toLowerCase() === cardName.toLowerCase());
+            const dueDay = reg ? reg.due_day : 10;
+            const dueDate = `${month}-${String(dueDay).padStart(2, '0')}`;
+
             invoices.push({ 
-                id: persisted ? persisted.id : `gen_card_${month}`, 
+                id: persisted ? persisted.id : `gen_card_${cardName}_${month}`, 
                 amount: val, 
                 type: 'expense', 
                 categoryId: cardCat.id, 
-                description: persisted ? persisted.description : `Faturas de Cartão - ${month}`, 
-                dueDate: persisted ? persisted.dueDate : `${month}-10`, 
+                description: persisted ? persisted.description : description, 
+                dueDate: persisted ? persisted.dueDate : dueDate, 
                 status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
                 isGenerated: true,
                 isBudgetGoal: false
             });
         });
         return invoices;
-    }, [cardTransactions, categories, plannedTransactions, transactions]);
+    }, [cardTransactions, categories, plannedTransactions, transactions, cardRegistries]);
 
     const addCategory = async (cat: Omit<Category, 'id'>) => {
         const newCat = { ...cat, id: generateUUID() };
@@ -313,13 +341,28 @@ export const useFinanceData = () => {
         await syncItem('categories', { id }, 'delete');
     };
 
+    const addCardRegistry = async (reg: Omit<CardRegistry, 'id'>) => {
+        const newReg = { ...reg, id: generateUUID() };
+        setCardRegistries(prev => [...prev, newReg]);
+        await syncItem('card_registries', newReg);
+    };
+
+    const updateCardRegistry = async (reg: CardRegistry) => {
+        setCardRegistries(prev => prev.map(r => r.id === reg.id ? reg : r));
+        await syncItem('card_registries', reg);
+    };
+
+    const deleteCardRegistry = async (id: string) => {
+        setCardRegistries(prev => prev.filter(r => r.id !== id));
+        await syncItem('card_registries', { id }, 'delete');
+    };
+
     return {
-        transactions, categories, budgets, plannedTransactions, cardTransactions, investments, settings, loading, error,
+        transactions, categories, budgets, plannedTransactions, cardTransactions, cardRegistries, investments, settings, loading, error,
         getMonthlySummary, getGeneratedMovementForMonth,
         addTransaction, updateTransaction, deleteTransaction, 
         addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
         markPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
-            // USAR DATA DE HOJE NA BAIXA
             const todayISO = new Date().toISOString().split('T')[0];
             await addTransaction({ 
                 amount: planned.amount, 
@@ -353,6 +396,7 @@ export const useFinanceData = () => {
             await syncItem('planned_transactions', pendingItem);
         },
         addCategory, updateCategory, deleteCategory,
+        addCardRegistry, updateCardRegistry, deleteCardRegistry,
         generatedCardInvoices, generatedTithing,
         totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0),
         updateSettings: async (s: AppSettings) => {
@@ -403,7 +447,7 @@ export const useFinanceData = () => {
             await syncItem('investments', { id }, 'delete');
         },
         exportData: () => {
-            const data = { transactions, plannedTransactions, cardTransactions, investments, categories, settings };
+            const data = { transactions, plannedTransactions, cardTransactions, cardRegistries, investments, categories, settings };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `flux_backup.json`; a.click();
         },
@@ -413,6 +457,7 @@ export const useFinanceData = () => {
                 if (data.transactions) setTransactions(data.transactions);
                 if (data.categories) setCategories(data.categories);
                 if (data.cardTransactions) setCardTransactions(data.cardTransactions);
+                if (data.cardRegistries) setCardRegistries(data.cardRegistries);
                 if (data.plannedTransactions) setPlannedTransactions(data.plannedTransactions);
                 if (data.investments) setInvestments(data.investments);
                 return true;
@@ -426,11 +471,12 @@ export const useFinanceData = () => {
                     supabase.from('transactions').delete().eq('user_id', session.user.id),
                     supabase.from('planned_transactions').delete().eq('user_id', session.user.id),
                     supabase.from('card_transactions').delete().eq('user_id', session.user.id),
+                    supabase.from('card_registries').delete().eq('user_id', session.user.id),
                     supabase.from('investments').delete().eq('user_id', session.user.id),
                     supabase.from('categories').delete().eq('user_id', session.user.id),
                     supabase.from('settings').delete().eq('user_id', session.user.id),
                 ]);
-                setTransactions([]); setPlannedTransactions([]); setCardTransactions([]); setInvestments([]); setCategories([]); setSettings(DEFAULT_SETTINGS);
+                setTransactions([]); setPlannedTransactions([]); setCardTransactions([]); setCardRegistries([]); setInvestments([]); setCategories([]); setSettings(DEFAULT_SETTINGS);
                 await loadData();
             } catch (e) { console.error("Erro ao resetar dados:", e); } finally { setLoading(false); }
         }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
@@ -67,7 +66,7 @@ const App: React.FC = () => {
     transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory, getGeneratedMovementForMonth,
     plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
-    cardTransactions, addCardTransaction, updateCardTransaction, deleteCardTransaction,
+    cardTransactions, cardRegistries, addCardTransaction, updateCardTransaction, deleteCardTransaction, addCardRegistry, updateCardRegistry, deleteCardRegistry,
     investments, addInvestment, updateInvestment, deleteInvestment,
     addCategory, updateCategory, deleteCategory,
     loading, error, totalBalance,
@@ -202,17 +201,30 @@ const App: React.FC = () => {
   const filteredMovement = useMemo(() => getGeneratedMovementForMonth(monthPrefix), [getGeneratedMovementForMonth, monthPrefix]);
 
   const combinedPlannedTransactions = useMemo(() => {
+      const todayISO = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowISO = tomorrow.toISOString().split('T')[0];
+
       const baseList = [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement];
+      
       return baseList.map(pt => {
-          if (pt.isBudgetGoal && pt.status === 'pending') {
+          let finalPt = { ...pt };
+
+          // REGRA DE BUMP: Se estiver pendente e for do passado, joga para amanhã visualmente
+          if (finalPt.status === 'pending' && finalPt.dueDate < todayISO) {
+              finalPt.dueDate = tomorrowISO;
+          }
+
+          if (finalPt.isBudgetGoal && finalPt.status === 'pending') {
               const spentInCategory = filteredTransactions
-                  .filter(t => t.categoryId === pt.categoryId && t.type === pt.type)
+                  .filter(t => t.categoryId === finalPt.categoryId && t.type === finalPt.type)
                   .reduce((acc, curr) => acc + curr.amount, 0);
               
-              const remaining = Math.max(0, pt.amount - spentInCategory);
-              return { ...pt, amount: remaining };
+              const remaining = Math.max(0, finalPt.amount - spentInCategory);
+              finalPt.amount = remaining;
           }
-          return pt;
+          return finalPt;
       }).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
   }, [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement, filteredTransactions]);
 
@@ -302,7 +314,7 @@ const App: React.FC = () => {
             </nav>
           </div>
           <div className="flex items-center gap-4">
-             {view !== 'cards' && view !== 'categories' && view !== 'investments' && (
+             {view !== 'categories' && view !== 'investments' && (
                 <div className="flex items-center gap-2 text-lg font-semibold">
                     <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeftIcon /></button>
                     <span className="w-32 text-center capitalize text-sm sm:text-base">{displayDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}</span>
@@ -335,7 +347,19 @@ const App: React.FC = () => {
             </>
         )}
         {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} />}
-        {view === 'cards' && <CardView transactions={cardTransactions} onAdd={addCardTransaction} onUpdate={updateCardTransaction} onDelete={deleteCardTransaction} />}
+        {view === 'cards' && (
+            <CardView 
+                transactions={cardTransactions} 
+                registries={cardRegistries}
+                displayDate={displayDate}
+                onAdd={addCardTransaction} 
+                onUpdate={updateCardTransaction} 
+                onDelete={deleteCardTransaction} 
+                onAddRegistry={addCardRegistry}
+                onUpdateRegistry={updateCardRegistry}
+                onDeleteRegistry={deleteCardRegistry}
+            />
+        )}
         {view === 'investments' && <InvestmentView investments={investments} onEdit={handleEditInvestmentClick} onDelete={handleInvestmentDelete} onBulkUpdate={handleBulkInvestmentUpdate} />}
         {view === 'categories' && <CategoryList categories={categories} onEdit={handleEditCategoryClick} onDelete={deleteCategory} onAdd={handleAddCategoryClick} />}
       </main>

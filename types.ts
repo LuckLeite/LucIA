@@ -1,4 +1,3 @@
-
 import type { FC, SVGProps } from 'react';
 
 export type TransactionType = 'income' | 'expense';
@@ -31,6 +30,12 @@ export interface CardTransaction {
   totalAmount: number;
   installments: number;
   purchaseDate: string; // ISO string format
+}
+
+export interface CardRegistry {
+  id: string;
+  name: string;
+  due_day: number;
 }
 
 export type InvestmentType = 'fixed' | 'stock' | 'fund' | 'crypto' | 'other';
