@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Category } from '../types';
 import BalanceLineChart from './charts/BalanceLineChart';
@@ -20,7 +21,7 @@ interface DashboardProps {
 const StatCard: React.FC<{ title: string; amount: number; color?: string; icon: React.ReactNode }> = ({ title, amount, color, icon }) => (
     <div className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm flex items-center justify-between gap-3 border border-gray-100 dark:border-slate-700 h-auto">
         <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-0.5 truncate">{title}</p>
+            <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-0.5 truncate">{title}</p>
             <p className={`text-lg sm:text-xl font-black leading-none whitespace-nowrap overflow-hidden text-ellipsis ${color || 'text-gray-900 dark:text-gray-100'}`}>
                 {amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
@@ -40,7 +41,6 @@ const PlannedIncomeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="1
 const Dashboard: React.FC<DashboardProps> = ({ monthlyIncome, monthlyExpense, monthlyPlannedExpense, monthlyPlannedIncome, balanceChartData, currentBalance }) => {
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      {/* Grid compacta de 5 colunas para desktop coloca tudo na mesma linha */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard title="Saldo atual" amount={currentBalance} color={currentBalance >= 0 ? 'text-income' : 'text-expense'} icon={<BalanceIcon />} />
         <StatCard title="Receitas (Mês)" amount={monthlyIncome} color="text-income" icon={<IncomeIcon />} />

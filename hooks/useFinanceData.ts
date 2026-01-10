@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { Transaction, PlannedTransaction, CardTransaction, CardRegistry, Category, AppSettings, Investment, Budget } from '../types';
@@ -161,7 +162,7 @@ export const useFinanceData = () => {
             setPlannedTransactions(updatedList);
             if (supabase && session) {
                 const dataToSync = toUpdate.map(t => ({ ...t, amount: tx.amount, categoryId: tx.categoryId, description: tx.description, isBudgetGoal: tx.isBudgetGoal, user_id: session.user.id }));
-                await supabase.from('planned_transactions').upsert(dataToSync);
+                await supabase.from('planned_transactions').upsert(updatedList.filter(t => toUpdate.some(u => u.id === t.id)).map(t => ({...t, user_id: session.user.id})));
             }
         }
     };
@@ -184,10 +185,22 @@ export const useFinanceData = () => {
     const getMonthlySummary = useCallback((date: Date) => {
         const monthPrefix = date.toISOString().slice(0, 7);
         const monthTxs = transactions.filter(t => t.date.startsWith(monthPrefix));
-        const income = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-        const expense = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+        
+        // Identificar categorias que são de 'Movimento' (transferências internas)
+        const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const movCategoryIds = categories.filter(c => normalizeStr(c.name) === 'movimento').map(c => c.id);
+
+        // Soma apenas o que não for movimento para não inflar as receitas/despesas
+        const income = monthTxs
+            .filter(t => t.type === 'income' && !movCategoryIds.includes(t.categoryId))
+            .reduce((acc, t) => acc + t.amount, 0);
+            
+        const expense = monthTxs
+            .filter(t => t.type === 'expense' && !movCategoryIds.includes(t.categoryId))
+            .reduce((acc, t) => acc + t.amount, 0);
+            
         return { income, expense };
-    }, [transactions]);
+    }, [transactions, categories]);
 
     const getGeneratedMovementForMonth = useCallback((monthPrefix: string) => {
         if (categories.length === 0) return [];
@@ -305,7 +318,6 @@ export const useFinanceData = () => {
                 p.isGenerated === true
             );
 
-            // Obter dia de vencimento cadastrado
             const reg = cardRegistries.find(r => r.name.toLowerCase() === cardName.toLowerCase());
             const dueDay = reg ? reg.due_day : 10;
             const dueDate = `${month}-${String(dueDay).padStart(2, '0')}`;
