@@ -171,7 +171,7 @@ const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ planned
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, PlannedTransaction[]> = {};
     plannedTransactions.forEach(pt => {
-        const groupName = pt.group || 'Geral';
+        const groupName = pt.group_name || 'Geral';
         if (!groups[groupName]) groups[groupName] = [];
         groups[groupName].push(pt);
     });
