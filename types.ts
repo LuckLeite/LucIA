@@ -23,6 +23,7 @@ export interface PlannedTransaction {
   isGenerated?: boolean;
   is_budget_goal?: boolean; 
   group?: string; 
+  group_name?: string; // Adicionado para suportar a propriedade usada na UI
   recurrence_id?: string; // Novo campo para desvincular séries duplicadas
 }
 

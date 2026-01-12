@@ -11,12 +11,14 @@ interface State {
 }
 
 // Standard Error Boundary component implementation.
-// Fixed by extending React.Component explicitly to ensure proper type resolution of this.props and this.state by the TypeScript compiler.
-class ErrorBoundary extends React.Component<Props, State> {
-  // Initialize state property
-  state: State = {
-    hasError: false
-  };
+// Fixed by extending Component directly and using a constructor to ensure this.props is correctly typed and recognized by the compiler.
+class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false
+    };
+  }
 
   static getDerivedStateFromError(error: Error): State {
     // Update state so the next render will show the fallback UI.
