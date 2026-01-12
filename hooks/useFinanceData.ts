@@ -113,6 +113,7 @@ export const useFinanceData = () => {
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
             if (set.data) setSettings(set.data || DEFAULT_SETTINGS);
+            else setSettings(DEFAULT_SETTINGS);
         } catch (err: any) {
             console.error("Erro ao carregar dados:", err);
             setError("Erro ao carregar dados do servidor.");
@@ -277,28 +278,19 @@ export const useFinanceData = () => {
     }, [transactions, categories, plannedTransactions]);
 
     const generatedTithing = useMemo(() => {
-        // Se o dízimo estiver desligado nas configurações, não faz nada
         if (!settings.calculateTithing || categories.length === 0) return [];
         
         const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        // Encontra a categoria "Dízimo" (para lançar a despesa planejada)
-        const tithingCat = categories.find(c => 
-            c.type === 'expense' && 
-            normalizeStr(c.name).includes('dizimo')
-        );
+        const tithingCat = categories.find(c => c.type === 'expense' && normalizeStr(c.name).includes('dizimo'));
         if (!tithingCat) return [];
 
         const catMap = new Map<string, Category>(categories.map(c => [c.id, c]));
         const incomeByMonth = new Map<string, number>();
 
-        // LÓGICA ESTREITA: Baseia-se exclusivamente no checkbox 'includeInTithing'
         transactions.forEach(t => {
             if (t.type !== 'income') return;
             const month = t.date.slice(0, 7);
             const cat = catMap.get(t.categoryId);
-            
-            // SOMENTE se o checkbox estiver marcado
             if (cat && cat.includeInTithing === true) {
                 incomeByMonth.set(month, (incomeByMonth.get(month) || 0) + t.amount);
             }
@@ -308,18 +300,10 @@ export const useFinanceData = () => {
         incomeByMonth.forEach((totalIncome, month) => {
             if (totalIncome <= 0) return;
             const expectedTithing = totalIncome * 0.1;
-
-            // Verifica o que já foi pago manualmente desse dízimo no mês
-            const alreadyPaidReal = transactions.filter(t => 
-                t.date.startsWith(month) && t.categoryId === tithingCat.id
-            ).reduce((acc, t) => acc + t.amount, 0);
-
+            const alreadyPaidReal = transactions.filter(t => t.date.startsWith(month) && t.categoryId === tithingCat.id).reduce((acc, t) => acc + t.amount, 0);
             const remainingTithing = Math.max(0, expectedTithing - alreadyPaidReal);
             const isPaid = remainingTithing <= 0.01;
-
-            const persisted = plannedTransactions.find(p => 
-                p.dueDate.startsWith(month) && p.categoryId === tithingCat.id && p.isGenerated === true
-            );
+            const persisted = plannedTransactions.find(p => p.dueDate.startsWith(month) && p.categoryId === tithingCat.id && p.isGenerated === true);
             
             items.push({ 
                 id: persisted ? persisted.id : `gen_tithing_${month}`, 
@@ -365,7 +349,19 @@ export const useFinanceData = () => {
             const reg = cardRegistries.find(r => r.name.toLowerCase() === cardName.toLowerCase());
             const dueDay = reg ? reg.due_day : 10;
             const dueDate = `${month}-${String(dueDay).padStart(2, '0')}`;
-            invoices.push({ id: persisted ? persisted.id : `gen_card_${cardName}_${month}`, amount: val, type: 'expense', categoryId: cardCat.id, description: persisted ? persisted.description : description, dueDate: persisted ? persisted.dueDate : dueDate, status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), isGenerated: true, i_budget_goal: false, group_name: 'Automáticos', recurrence_id: `gen_card_${cardName}_${month}` });
+            invoices.push({ 
+                id: persisted ? persisted.id : `gen_card_${cardName}_${month}`, 
+                amount: val, 
+                type: 'expense', 
+                categoryId: cardCat.id, 
+                description: persisted ? persisted.description : description, 
+                dueDate: persisted ? persisted.dueDate : dueDate, 
+                status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
+                isGenerated: true, 
+                is_budget_goal: false, 
+                group_name: 'Automáticos', 
+                recurrence_id: `gen_card_${cardName}_${month}` 
+            });
         });
         return invoices;
     }, [cardTransactions, categories, plannedTransactions, transactions, cardRegistries]);
