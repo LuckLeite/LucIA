@@ -20,6 +20,12 @@ const addMonthsWithEndOfMonthCheck = (startDate: Date, monthsToAdd: number) => {
     return d;
 };
 
+const getMonthDiff = (date1: string, date2: string) => {
+    const d1 = new Date(date1 + 'T12:00:00Z');
+    const d2 = new Date(date2 + 'T12:00:00Z');
+    return (d2.getUTCFullYear() - d1.getUTCFullYear()) * 12 + (d2.getUTCMonth() - d1.getUTCMonth());
+};
+
 export const useFinanceData = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [plannedTransactions, setPlannedTransactions] = useState<PlannedTransaction[]>([]);
@@ -46,13 +52,19 @@ export const useFinanceData = () => {
 
         try {
             if (operation === 'delete') {
-                await supabase.from(table).delete().eq('id', item.id);
+                const { error } = await supabase.from(table).delete().eq('id', item.id);
+                if (error) throw error;
             } else {
-                const { ...dataToSync } = item;
-                await supabase.from(table).upsert({ ...dataToSync, user_id: session.user.id });
+                let dataToSync = { ...item, user_id: session.user.id };
+                if (table === 'categories') {
+                    (dataToSync as any).include_in_tithing = item.includeInTithing;
+                }
+                const { error } = await supabase.from(table).upsert(dataToSync);
+                if (error) throw error;
             }
         } catch (e: any) {
-            console.error(`Erro ao sincronizar ${table}:`, e.message);
+            console.error(`Erro crítico ao sincronizar ${table}:`, JSON.stringify(e, null, 2));
+            setError(`Falha ao salvar no banco: ${e.message || 'Erro desconhecido'}`);
         }
     };
 
@@ -69,25 +81,33 @@ export const useFinanceData = () => {
                 supabase.from('card_transactions').select('*'),
                 supabase.from('card_registries').select('*'),
                 supabase.from('investments').select('*'),
-                supabase.from('categories').select('*'),
+                supabase.from('categories').select('*').order('sort_order', { ascending: true }),
                 supabase.from('budgets').select('*'),
                 supabase.from('settings').select('*').single()
             ]);
 
-            if (cat.data && cat.data.length === 0) {
-                const seedCategories = INITIAL_CATEGORIES_TEMPLATE.map(c => ({
-                    ...c,
-                    id: generateUUID(),
-                    user_id: session.user.id
-                }));
-                const { data: insertedCats } = await supabase.from('categories').insert(seedCategories).select();
-                if (insertedCats) setCategories(insertedCats);
-            } else if (cat.data) {
-                setCategories(cat.data);
+            if (cat.data) {
+                if (cat.data.length === 0) {
+                    const seedCategories = INITIAL_CATEGORIES_TEMPLATE.map((c, idx) => ({
+                        ...c,
+                        id: generateUUID(),
+                        user_id: session.user.id,
+                        sort_order: idx
+                    }));
+                    const { data: insertedCats } = await supabase.from('categories').insert(seedCategories).select();
+                    if (insertedCats) setCategories(insertedCats);
+                } else {
+                    const normalizedCategories = cat.data.map((c: any) => ({
+                        ...c,
+                        includeInTithing: c.includeInTithing ?? c.include_in_tithing ?? c.includeintithing ?? (c.type === 'income'),
+                        sort_order: c.sort_order ?? c.sortorder
+                    }));
+                    setCategories(normalizedCategories);
+                }
             }
 
             if (txs.data) setTransactions(txs.data);
-            if (pln.data) setPlannedTransactions(pln.data || []);
+            if (pln.data) setPlannedTransactions(pln.data);
             if (crd.data) setCardTransactions(crd.data);
             if (creg.data) setCardRegistries(creg.data || []);
             if (inv.data) setInvestments(inv.data);
@@ -95,6 +115,7 @@ export const useFinanceData = () => {
             if (set.data) setSettings(set.data || DEFAULT_SETTINGS);
         } catch (err: any) {
             console.error("Erro ao carregar dados:", err);
+            setError("Erro ao carregar dados do servidor.");
         } finally {
             setLoading(false);
         }
@@ -118,9 +139,19 @@ export const useFinanceData = () => {
         await syncItem('transactions', { id }, 'delete');
     };
 
+    const duplicateTransaction = async (id: string) => {
+        const original = transactions.find(t => t.id === id);
+        if (original) {
+            const { id: _, ...data } = original;
+            await addTransaction(data);
+        }
+    };
+
     const addPlannedTransaction = async (tx: Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount: number = 0) => {
         const items: PlannedTransaction[] = [];
         const start = new Date(tx.dueDate + 'T12:00:00Z');
+        const rId = generateUUID();
+        
         for (let i = 0; i <= recurrenceCount; i++) {
             const d = addMonthsWithEndOfMonthCheck(start, i);
             const newItem: PlannedTransaction = {
@@ -128,7 +159,9 @@ export const useFinanceData = () => {
                 id: generateUUID(),
                 dueDate: d.toISOString().split('T')[0],
                 status: 'pending',
-                isBudgetGoal: tx.isBudgetGoal || false
+                is_budget_goal: tx.is_budget_goal || false,
+                group_name: tx.group_name || 'Geral',
+                recurrence_id: rId 
             };
             items.push(newItem);
         }
@@ -145,6 +178,7 @@ export const useFinanceData = () => {
             if (String(tx.id).startsWith('gen_')) {
                 finalTx.id = generateUUID();
                 finalTx.isGenerated = true;
+                finalTx.recurrence_id = generateUUID();
                 setPlannedTransactions(prev => [...prev, finalTx]);
             } else {
                 setPlannedTransactions(prev => prev.map(t => t.id === tx.id ? finalTx : t));
@@ -153,16 +187,22 @@ export const useFinanceData = () => {
         } else {
             const target = plannedTransactions.find(t => t.id === tx.id);
             if (!target) return;
-            const toUpdate = plannedTransactions.filter(t => t.description === target.description && t.categoryId === target.categoryId && t.dueDate >= target.dueDate && !String(t.id).startsWith('gen_'));
+            const toUpdate = plannedTransactions.filter(t => (target.recurrence_id ? t.recurrence_id === target.recurrence_id : (t.description === target.description && t.categoryId === target.categoryId)) && t.dueDate >= target.dueDate && !String(t.id).startsWith('gen_'));
+            const originalBaseDate = target.dueDate;
+            const newBaseDate = tx.dueDate;
+            const startOfNewSeries = new Date(newBaseDate + 'T12:00:00Z');
             const updatedList = plannedTransactions.map(t => {
-                const match = toUpdate.find(u => u.id === t.id);
-                if (match) return { ...t, amount: tx.amount, categoryId: tx.categoryId, description: tx.description, isBudgetGoal: tx.isBudgetGoal };
+                if (toUpdate.some(u => u.id === t.id)) {
+                    const monthOffset = getMonthDiff(originalBaseDate, t.dueDate);
+                    const newDate = addMonthsWithEndOfMonthCheck(startOfNewSeries, monthOffset).toISOString().split('T')[0];
+                    return { ...t, amount: tx.amount, categoryId: tx.categoryId, description: tx.description, is_budget_goal: tx.is_budget_goal, group_name: tx.group_name, dueDate: newDate };
+                }
                 return t;
             });
             setPlannedTransactions(updatedList);
             if (supabase && session) {
-                const dataToSync = toUpdate.map(t => ({ ...t, amount: tx.amount, categoryId: tx.categoryId, description: tx.description, isBudgetGoal: tx.isBudgetGoal, user_id: session.user.id }));
-                await supabase.from('planned_transactions').upsert(updatedList.filter(t => toUpdate.some(u => u.id === t.id)).map(t => ({...t, user_id: session.user.id})));
+                const dataToSync = updatedList.filter(t => toUpdate.some(u => u.id === t.id)).map(t => ({...t, user_id: session.user.id}));
+                await supabase.from('planned_transactions').upsert(dataToSync);
             }
         }
     };
@@ -175,30 +215,32 @@ export const useFinanceData = () => {
         } else {
             const target = plannedTransactions.find(t => t.id === id);
             if (!target) return;
-            const toDelete = plannedTransactions.filter(t => t.description === target.description && t.categoryId === target.categoryId && t.dueDate >= target.dueDate);
+            const toDelete = plannedTransactions.filter(t => (target.recurrence_id ? t.recurrence_id === target.recurrence_id : (t.description === target.description && t.categoryId === target.categoryId)) && t.dueDate >= target.dueDate);
             const ids = toDelete.map(t => t.id);
             setPlannedTransactions(prev => prev.filter(t => !ids.includes(t.id)));
             if (supabase) await supabase.from('planned_transactions').delete().in('id', ids);
         }
     };
 
+    const duplicatePlannedTransaction = async (id: string) => {
+        const original = plannedTransactions.find(t => t.id === id);
+        if (original) {
+            let recurrenceCount = 0;
+            if (original.recurrence_id) {
+                recurrenceCount = plannedTransactions.filter(t => t.recurrence_id === original.recurrence_id).length - 1;
+            }
+            const { id: _, status: __, recurrence_id: ___, isGenerated: ____, ...data } = original;
+            await addPlannedTransaction(data as any, recurrenceCount);
+        }
+    };
+
     const getMonthlySummary = useCallback((date: Date) => {
         const monthPrefix = date.toISOString().slice(0, 7);
         const monthTxs = transactions.filter(t => t.date.startsWith(monthPrefix));
-        
-        // Identificar categorias que são de 'Movimento' (transferências internas)
         const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const movCategoryIds = categories.filter(c => normalizeStr(c.name) === 'movimento').map(c => c.id);
-
-        // Soma apenas o que não for movimento para não inflar as receitas/despesas
-        const income = monthTxs
-            .filter(t => t.type === 'income' && !movCategoryIds.includes(t.categoryId))
-            .reduce((acc, t) => acc + t.amount, 0);
-            
-        const expense = monthTxs
-            .filter(t => t.type === 'expense' && !movCategoryIds.includes(t.categoryId))
-            .reduce((acc, t) => acc + t.amount, 0);
-            
+        const income = monthTxs.filter(t => t.type === 'income' && !movCategoryIds.includes(t.categoryId)).reduce((acc, t) => acc + t.amount, 0);
+        const expense = monthTxs.filter(t => t.type === 'expense' && !movCategoryIds.includes(t.categoryId)).reduce((acc, t) => acc + t.amount, 0);
         return { income, expense };
     }, [transactions, categories]);
 
@@ -207,24 +249,18 @@ export const useFinanceData = () => {
         const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const movCategoryIds = categories.filter(c => normalizeStr(c.name) === 'movimento').map(c => c.id);
         if (movCategoryIds.length === 0) return [];
-
         const firstDay = `${monthPrefix}-01`;
         const [year, month] = monthPrefix.split('-').map(Number);
         const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
-        
         const monthTxs = transactions.filter(t => t.date >= firstDay && t.date <= lastDay && movCategoryIds.includes(t.categoryId));
         const totalExpenses = monthTxs.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
         const totalIncomes = monthTxs.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-        
         if (totalExpenses === 0 && totalIncomes === 0) return [];
-
         const remainingBalance = totalExpenses - totalIncomes;
         const isPaid = remainingBalance <= 0.01;
-
         const persisted = plannedTransactions.find(p => p.dueDate.startsWith(monthPrefix) && movCategoryIds.includes(p.categoryId) && p.isGenerated === true && p.type === 'income');
         const movIncomeCat = categories.find(c => normalizeStr(c.name) === 'movimento' && c.type === 'income');
         if (!movIncomeCat) return [];
-
         return [{
             id: persisted ? persisted.id : `gen_mov_acc_${monthPrefix}`,
             amount: isPaid ? totalIncomes : remainingBalance,
@@ -234,45 +270,69 @@ export const useFinanceData = () => {
             dueDate: persisted ? persisted.dueDate : firstDay,
             status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'),
             isGenerated: true,
-            isBudgetGoal: false
+            is_budget_goal: false,
+            group_name: 'Automáticos',
+            recurrence_id: `gen_mov_${monthPrefix}`
         }];
     }, [transactions, categories, plannedTransactions]);
 
     const generatedTithing = useMemo(() => {
+        // Se o dízimo estiver desligado nas configurações, não faz nada
         if (!settings.calculateTithing || categories.length === 0) return [];
-        const tithingCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('dizimo')) && c.type === 'expense');
-        if (!tithingCat) return [];
         
-        const items: PlannedTransaction[] = [];
-        const incomeMonths = new Set<string>(transactions.filter(t => t.type === 'income').map(t => t.date.slice(0, 7)));
+        const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-        incomeMonths.forEach(month => {
-            const firstDay = `${month}-01`;
-            const [y, m] = month.split('-').map(Number);
-            const lastDay = new Date(y, m, 0).toISOString().split('T')[0];
-            const totalIncomeForTithing = transactions.filter(t => t.date.startsWith(month) && t.type === 'income').reduce((acc, t) => {
-                const cat = categories.find(c => c.id === t.categoryId);
-                return cat?.includeInTithing ? acc + t.amount : acc;
-            }, 0);
+        // Encontra a categoria "Dízimo" (para lançar a despesa planejada)
+        const tithingCat = categories.find(c => 
+            c.type === 'expense' && 
+            normalizeStr(c.name).includes('dizimo')
+        );
+        if (!tithingCat) return [];
+
+        const catMap = new Map<string, Category>(categories.map(c => [c.id, c]));
+        const incomeByMonth = new Map<string, number>();
+
+        // LÓGICA ESTREITA: Baseia-se exclusivamente no checkbox 'includeInTithing'
+        transactions.forEach(t => {
+            if (t.type !== 'income') return;
+            const month = t.date.slice(0, 7);
+            const cat = catMap.get(t.categoryId);
             
-            if (totalIncomeForTithing <= 0) return;
-            const expectedTithing = totalIncomeForTithing * 0.1;
-            const alreadyPaidReal = transactions.filter(t => t.date >= firstDay && t.date <= lastDay && t.categoryId === tithingCat.id).reduce((acc, t) => acc + t.amount, 0);
-            const remainingTithing = expectedTithing - alreadyPaidReal;
+            // SOMENTE se o checkbox estiver marcado
+            if (cat && cat.includeInTithing === true) {
+                incomeByMonth.set(month, (incomeByMonth.get(month) || 0) + t.amount);
+            }
+        });
+
+        const items: PlannedTransaction[] = [];
+        incomeByMonth.forEach((totalIncome, month) => {
+            if (totalIncome <= 0) return;
+            const expectedTithing = totalIncome * 0.1;
+
+            // Verifica o que já foi pago manualmente desse dízimo no mês
+            const alreadyPaidReal = transactions.filter(t => 
+                t.date.startsWith(month) && t.categoryId === tithingCat.id
+            ).reduce((acc, t) => acc + t.amount, 0);
+
+            const remainingTithing = Math.max(0, expectedTithing - alreadyPaidReal);
             const isPaid = remainingTithing <= 0.01;
 
-            const persisted = plannedTransactions.find(p => p.dueDate.startsWith(month) && p.categoryId === tithingCat.id && p.isGenerated === true);
+            const persisted = plannedTransactions.find(p => 
+                p.dueDate.startsWith(month) && p.categoryId === tithingCat.id && p.isGenerated === true
+            );
             
             items.push({ 
                 id: persisted ? persisted.id : `gen_tithing_${month}`, 
-                amount: isPaid ? alreadyPaidReal : remainingTithing, 
+                amount: isPaid ? alreadyPaidReal : (persisted ? persisted.amount : remainingTithing), 
                 type: 'expense', 
                 categoryId: tithingCat.id, 
-                description: persisted ? persisted.description : isPaid ? `Dízimo Pago - ${month}` : `Dízimo Restante - ${month}`, 
+                description: persisted ? persisted.description : (isPaid ? `Dízimo - ${month} (Pago)` : `Dízimo - ${month}`), 
                 dueDate: persisted ? persisted.dueDate : `${month}-10`, 
                 status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
                 isGenerated: true, 
-                isBudgetGoal: false
+                is_budget_goal: false,
+                group_name: 'Automáticos',
+                recurrence_id: `gen_tithing_${month}`
             });
         });
         return items;
@@ -280,17 +340,15 @@ export const useFinanceData = () => {
 
     const generatedCardInvoices = useMemo(() => {
         if (categories.length === 0) return [];
-        const cardCat = categories.find(c => (c.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('cartao')) && c.type === 'expense');
+        const normalizeStr = (s: string) => s.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const cardCat = categories.find(c => (normalizeStr(c.name).includes('cartao')) && c.type === 'expense');
         if (!cardCat) return [];
-        
         const invoices: PlannedTransaction[] = [];
         const cardGroups = new Map<string, number>();
-
         cardTransactions.forEach(tx => {
-            const cardName = tx.card || 'Sem Nome';
+            const cardName = tx.card.trim() || 'Sem Nome';
             const monthly = tx.totalAmount / tx.installments;
             const start = new Date(tx.purchaseDate + 'T12:00:00Z');
-            
             for (let i = 1; i <= tx.installments; i++) {
                 const d = addMonthsWithEndOfMonthCheck(start, i);
                 const mKey = d.toISOString().slice(0, 7);
@@ -298,47 +356,22 @@ export const useFinanceData = () => {
                 cardGroups.set(compositeKey, (cardGroups.get(compositeKey) || 0) + monthly);
             }
         });
-
         cardGroups.forEach((val, compositeKey) => {
             const [cardName, month] = compositeKey.split('@@@');
             const description = `Fatura ${cardName} - ${month}`;
-            
-            const alreadyPaidReal = transactions.filter(t => 
-                t.date.startsWith(month) && 
-                t.categoryId === cardCat.id && 
-                t.description.includes(cardName)
-            ).reduce((acc, t) => acc + t.amount, 0);
-
+            const alreadyPaidReal = transactions.filter(t => t.date.startsWith(month) && t.categoryId === cardCat.id && t.description.includes(cardName)).reduce((acc, t) => acc + t.amount, 0);
             const isPaid = alreadyPaidReal >= (val - 0.01);
-            
-            const persisted = plannedTransactions.find(p => 
-                p.dueDate.startsWith(month) && 
-                p.categoryId === cardCat.id && 
-                p.description === description &&
-                p.isGenerated === true
-            );
-
+            const persisted = plannedTransactions.find(p => p.dueDate.startsWith(month) && p.categoryId === cardCat.id && p.description === description && p.isGenerated === true);
             const reg = cardRegistries.find(r => r.name.toLowerCase() === cardName.toLowerCase());
             const dueDay = reg ? reg.due_day : 10;
             const dueDate = `${month}-${String(dueDay).padStart(2, '0')}`;
-
-            invoices.push({ 
-                id: persisted ? persisted.id : `gen_card_${cardName}_${month}`, 
-                amount: val, 
-                type: 'expense', 
-                categoryId: cardCat.id, 
-                description: persisted ? persisted.description : description, 
-                dueDate: persisted ? persisted.dueDate : dueDate, 
-                status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), 
-                isGenerated: true,
-                isBudgetGoal: false
-            });
+            invoices.push({ id: persisted ? persisted.id : `gen_card_${cardName}_${month}`, amount: val, type: 'expense', categoryId: cardCat.id, description: persisted ? persisted.description : description, dueDate: persisted ? persisted.dueDate : dueDate, status: isPaid ? 'paid' : (persisted ? persisted.status : 'pending'), isGenerated: true, i_budget_goal: false, group_name: 'Automáticos', recurrence_id: `gen_card_${cardName}_${month}` });
         });
         return invoices;
     }, [cardTransactions, categories, plannedTransactions, transactions, cardRegistries]);
 
     const addCategory = async (cat: Omit<Category, 'id'>) => {
-        const newCat = { ...cat, id: generateUUID() };
+        const newCat = { ...cat, id: generateUUID(), sort_order: categories.length };
         setCategories(prev => [...prev, newCat]);
         await syncItem('categories', newCat);
     };
@@ -351,6 +384,14 @@ export const useFinanceData = () => {
     const deleteCategory = async (id: string) => {
         setCategories(prev => prev.filter(c => c.id !== id));
         await syncItem('categories', { id }, 'delete');
+    };
+
+    const updateCategoryOrder = async (newOrder: Category[]) => {
+        setCategories(newOrder);
+        if (supabase && session) {
+            const updates = newOrder.map((cat, idx) => ({ ...cat, user_id: session.user.id, sort_order: idx }));
+            await supabase.from('categories').upsert(updates);
+        }
     };
 
     const addCardRegistry = async (reg: Omit<CardRegistry, 'id'>) => {
@@ -372,18 +413,11 @@ export const useFinanceData = () => {
     return {
         transactions, categories, budgets, plannedTransactions, cardTransactions, cardRegistries, investments, settings, loading, error,
         getMonthlySummary, getGeneratedMovementForMonth,
-        addTransaction, updateTransaction, deleteTransaction, 
-        addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction,
+        addTransaction, updateTransaction, deleteTransaction, duplicateTransaction,
+        addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, duplicatePlannedTransaction,
         markPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             const todayISO = new Date().toISOString().split('T')[0];
-            await addTransaction({ 
-                amount: planned.amount, 
-                categoryId: planned.categoryId, 
-                date: todayISO, 
-                description: planned.description, 
-                type: planned.type 
-            });
-            
+            await addTransaction({ amount: planned.amount, categoryId: planned.categoryId, date: todayISO, description: planned.description, type: planned.type });
             if (!String(planned.id).startsWith('gen_')) {
                 const paidPlanned = { ...planned, status: 'paid' as const };
                 setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? paidPlanned : t));
@@ -392,22 +426,13 @@ export const useFinanceData = () => {
         },
         unmarkPlannedTransactionAsPaid: async (planned: PlannedTransaction) => {
             if (String(planned.id).startsWith('gen_')) return;
-            
-            const matchingTx = transactions.find(t => 
-                t.amount === planned.amount && 
-                t.categoryId === planned.categoryId && 
-                t.description === planned.description
-            );
-            
-            if (matchingTx) {
-                await deleteTransaction(matchingTx.id);
-            }
-
+            const matchingTx = transactions.find(t => t.amount === planned.amount && t.categoryId === planned.categoryId && t.description === planned.description);
+            if (matchingTx) await deleteTransaction(matchingTx.id);
             const pendingItem: PlannedTransaction = { ...planned, status: 'pending' as const };
             setPlannedTransactions(prev => prev.map(t => t.id === planned.id ? pendingItem : t));
             await syncItem('planned_transactions', pendingItem);
         },
-        addCategory, updateCategory, deleteCategory,
+        addCategory, updateCategory, deleteCategory, updateCategoryOrder,
         addCardRegistry, updateCardRegistry, deleteCardRegistry,
         generatedCardInvoices, generatedTithing,
         totalBalance: transactions.reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0),
@@ -427,10 +452,6 @@ export const useFinanceData = () => {
         updateMultipleTransactionsCategory: async (ids: string[], categoryId: string) => {
             setTransactions(prev => prev.map(t => ids.includes(t.id) ? { ...t, categoryId } : t));
             if (supabase) await supabase.from('transactions').update({ categoryId }).in('id', ids);
-        },
-        duplicateTransaction: async (id: string) => {
-            const original = transactions.find(t => t.id === id);
-            if (original) { const { id: _, ...data } = original; await addTransaction(data); }
         },
         addCardTransaction: async (tx: Omit<CardTransaction, 'id'>) => {
             const newTx = { ...tx, id: generateUUID() };

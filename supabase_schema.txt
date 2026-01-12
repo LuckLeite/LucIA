@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS planned_transactions (
   dueDate DATE NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('pending', 'paid')),
   isGenerated BOOLEAN DEFAULT false,
+  "group" TEXT DEFAULT 'Geral',
+  isBudgetGoal BOOLEAN DEFAULT false,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 

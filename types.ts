@@ -1,3 +1,4 @@
+
 import type { FC, SVGProps } from 'react';
 
 export type TransactionType = 'income' | 'expense';
@@ -20,7 +21,9 @@ export interface PlannedTransaction {
   dueDate: string; // ISO string format for the due date
   status: 'pending' | 'paid';
   isGenerated?: boolean;
-  isBudgetGoal?: boolean; // Nova flag para metas
+  is_budget_goal?: boolean; 
+  group_name?: string; 
+  recurrence_id?: string; // Novo campo para desvincular séries duplicadas
 }
 
 export interface CardTransaction {
@@ -52,7 +55,7 @@ export interface Investment {
     rateType: IndexerType;
     rateValue: number; // e.g., 100 (% of CDI), 6 (IPCA + 6%), 12 (12% PRE)
     categoryId: string; // Optional linkage to category for color/icon
-    group?: string; // New field: e.g., "Casal", "Pessoal", "Reserva"
+    group_name?: string; 
 }
 
 export interface Category {
@@ -62,6 +65,7 @@ export interface Category {
   color: string;
   type: TransactionType;
   includeInTithing?: boolean;
+  sort_order?: number; // Campo para ordenação manual
 }
 
 export interface Budget {

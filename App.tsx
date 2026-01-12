@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import Dashboard from './components/Dashboard';
 import TransactionList from './components/TransactionList';
@@ -65,10 +66,10 @@ const App: React.FC = () => {
   const {
     transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
     getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory, getGeneratedMovementForMonth,
-    plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
+    plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, duplicatePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
     cardTransactions, cardRegistries, addCardTransaction, updateCardTransaction, deleteCardTransaction, addCardRegistry, updateCardRegistry, deleteCardRegistry,
     investments, addInvestment, updateInvestment, deleteInvestment,
-    addCategory, updateCategory, deleteCategory,
+    addCategory, updateCategory, deleteCategory, updateCategoryOrder,
     loading, error, totalBalance,
     exportData, importData, clearAllData, settings, updateSettings
   } = useFinanceData();
@@ -113,10 +114,18 @@ const App: React.FC = () => {
     const target = plannedTransactions.find(t => t.id === id);
     if (!target) { deletePlannedTransaction(id); return; }
     setPlannedDeletionTarget(target);
-    const futures = plannedTransactions.filter(t => 
-        t.id !== target.id && t.description === target.description && t.categoryId === target.categoryId && t.dueDate > target.dueDate
-    );
-    setHasFutureMatches(futures.length > 0); setPlannedDeleteModalOpen(true);
+    
+    // Busca precisão por recurrence_id
+    const futures = plannedTransactions.filter(t => {
+        const isMatch = target.recurrence_id 
+            ? t.recurrence_id === target.recurrence_id 
+            : (t.description === target.description && t.categoryId === target.categoryId);
+
+        return t.id !== target.id && isMatch && t.dueDate > target.dueDate;
+    });
+
+    setHasFutureMatches(futures.length > 0); 
+    setPlannedDeleteModalOpen(true);
   };
 
   const handleConfirmDeletePlanned = async (deleteFuture: boolean) => {
@@ -131,9 +140,16 @@ const App: React.FC = () => {
     try {
       if ('id' in transaction) { 
         const target = plannedTransactions.find(t => t.id === (transaction as PlannedTransaction).id);
-        const futures = plannedTransactions.filter(t => 
-            t.id !== target?.id && t.description === target?.description && t.categoryId === target?.categoryId && t.dueDate > target?.dueDate
-        );
+        if (!target) return;
+
+        const futures = plannedTransactions.filter(t => {
+            const isMatch = target.recurrence_id 
+                ? t.recurrence_id === target.recurrence_id 
+                : (t.description === target.description && t.categoryId === target.categoryId);
+
+            return t.id !== target.id && isMatch && t.dueDate > target.dueDate;
+        });
+
         if (futures.length > 0) {
             setPlannedEditTarget(transaction as PlannedTransaction);
             setPlannedEditCascadeModalOpen(true);
@@ -216,7 +232,7 @@ const App: React.FC = () => {
               finalPt.dueDate = tomorrowISO;
           }
 
-          if (finalPt.isBudgetGoal && finalPt.status === 'pending') {
+          if (finalPt.is_budget_goal && finalPt.status === 'pending') {
               const spentInCategory = filteredTransactions
                   .filter(t => t.categoryId === finalPt.categoryId && t.type === finalPt.type)
                   .reduce((acc, curr) => acc + curr.amount, 0);
@@ -291,6 +307,12 @@ const App: React.FC = () => {
     return Array.from(expenseByCategory.values());
   }, [filteredTransactions, categories]);
 
+  const uniquePlannedGroups = useMemo(() => {
+    const groups = new Set<string>();
+    plannedTransactions.forEach(t => groups.add(t.group_name || 'Geral'));
+    return Array.from(groups).sort();
+  }, [plannedTransactions]);
+
   if (!supabase || !session) return <Auth />;
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900"><div className="animate-spin h-10 w-10 border-4 border-primary-500 border-t-transparent rounded-full" /></div>;
 
@@ -346,7 +368,7 @@ const App: React.FC = () => {
                 <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>
             </>
         )}
-        {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} />}
+        {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onDuplicate={duplicatePlannedTransaction} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} />}
         {view === 'cards' && (
             <CardView 
                 transactions={cardTransactions} 
@@ -361,7 +383,7 @@ const App: React.FC = () => {
             />
         )}
         {view === 'investments' && <InvestmentView investments={investments} onEdit={handleEditInvestmentClick} onDelete={handleInvestmentDelete} onBulkUpdate={handleBulkInvestmentUpdate} />}
-        {view === 'categories' && <CategoryList categories={categories} onEdit={handleEditCategoryClick} onDelete={deleteCategory} onAdd={handleAddCategoryClick} />}
+        {view === 'categories' && <CategoryList categories={categories} onEdit={handleEditCategoryClick} onDelete={deleteCategory} onAdd={handleAddCategoryClick} onReorder={updateCategoryOrder} />}
       </main>
       <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">Developed By Lucas Leite 🥛</footer>
       
@@ -381,7 +403,7 @@ const App: React.FC = () => {
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
       <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}><TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} /></Modal>
-      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}><PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} /></Modal>
+      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}><PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} existingGroups={uniquePlannedGroups} /></Modal>
       <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}><CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} /></Modal>
       <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}><InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} /></Modal>
       

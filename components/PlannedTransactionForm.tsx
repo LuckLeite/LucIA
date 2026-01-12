@@ -6,11 +6,12 @@ interface PlannedTransactionFormProps {
   onSubmit: (data: { transaction: Omit<PlannedTransaction, 'id' | 'status'> | PlannedTransaction, recurrenceCount: number }) => void;
   transactionToEdit?: PlannedTransaction | null;
   categories: Category[];
+  existingGroups?: string[];
 }
 
 const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
 
-const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmit, transactionToEdit, categories }) => {
+const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmit, transactionToEdit, categories, existingGroups = [] }) => {
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<TransactionType>('expense');
   const [categoryId, setCategoryId] = useState('');
@@ -18,6 +19,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
   const [description, setDescription] = useState('');
   const [recurrenceCount, setRecurrenceCount] = useState('');
   const [isBudgetGoal, setIsBudgetGoal] = useState(false);
+  const [groupName, setGroupName] = useState('Geral');
 
   const filteredCategories = React.useMemo(() => categories.filter(c => c.type === type), [categories, type]);
 
@@ -28,7 +30,8 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setCategoryId(transactionToEdit.categoryId);
       setDueDate(parseDateAsUTC(transactionToEdit.dueDate).toISOString().split('T')[0]);
       setDescription(transactionToEdit.description);
-      setIsBudgetGoal(transactionToEdit.isBudgetGoal || false);
+      setIsBudgetGoal(transactionToEdit.is_budget_goal || false);
+      setGroupName(transactionToEdit.group_name || 'Geral');
     } else {
       setAmount('');
       setType('expense');
@@ -37,8 +40,19 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setDescription('');
       setRecurrenceCount('');
       setIsBudgetGoal(false);
+      setGroupName('Geral');
     }
   }, [transactionToEdit, categories]);
+
+  // Efeito para sincronizar o nome do grupo com a categoria selecionada (apenas para novos itens)
+  useEffect(() => {
+    if (!transactionToEdit && categoryId) {
+      const selectedCat = categories.find(c => c.id === categoryId);
+      if (selectedCat) {
+        setGroupName(selectedCat.name);
+      }
+    }
+  }, [categoryId, categories, transactionToEdit]);
 
   useEffect(() => {
     if (!transactionToEdit) {
@@ -59,7 +73,8 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       categoryId,
       dueDate,
       description,
-      isBudgetGoal
+      is_budget_goal: isBudgetGoal,
+      group_name: groupName || 'Geral'
     };
 
     if (transactionToEdit) {
@@ -87,6 +102,22 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
         <input id="description" value={description} onChange={e => setDescription(e.target.value)}
                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
       </div>
+
+      <div>
+        <label htmlFor="planned-group" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Grupo (Gaveta)</label>
+        <input 
+            id="planned-group" 
+            list="planned-group-suggestions" 
+            value={groupName} 
+            onChange={e => setGroupName(e.target.value)} 
+            placeholder="Ex: Contas de Casa, Lazer, Fixos"
+            className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
+        />
+        <datalist id="planned-group-suggestions">
+            {existingGroups.map(g => <option key={g} value={g} />)}
+        </datalist>
+      </div>
+
       <div>
         <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor</label>
         <input type="number" id="amount" value={amount} onChange={e => setAmount(e.target.value)} required
