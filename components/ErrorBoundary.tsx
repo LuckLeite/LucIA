@@ -11,8 +11,8 @@ interface State {
 }
 
 // Standard Error Boundary component implementation.
-// Fixed by extending React.Component explicitly to ensure proper type resolution of this.props and this.state by the TypeScript compiler.
-class ErrorBoundary extends React.Component<Props, State> {
+// Fixed by extending the named Component import to ensure proper type resolution of this.props and this.state.
+class ErrorBoundary extends Component<Props, State> {
   // Initialize state property
   state: State = {
     hasError: false
@@ -30,6 +30,7 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     // Access state and props from the class instance using 'this'.
+    // Fixed: 'this.props' is now correctly recognized by the compiler after changing inheritance.
     const { hasError, error } = this.state;
     const { children } = this.props;
 

@@ -19,7 +19,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
   const [description, setDescription] = useState('');
   const [recurrenceCount, setRecurrenceCount] = useState('');
   const [isBudgetGoal, setIsBudgetGoal] = useState(false);
-  const [groupName, setGroupName] = useState('Geral');
+  const [group, setGroup] = useState('Geral');
 
   const filteredCategories = React.useMemo(() => categories.filter(c => c.type === type), [categories, type]);
 
@@ -31,7 +31,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setDueDate(parseDateAsUTC(transactionToEdit.dueDate).toISOString().split('T')[0]);
       setDescription(transactionToEdit.description);
       setIsBudgetGoal(transactionToEdit.is_budget_goal || false);
-      setGroupName(transactionToEdit.group_name || 'Geral');
+      setGroup(transactionToEdit.group || 'Geral');
     } else {
       setAmount('');
       setType('expense');
@@ -40,7 +40,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setDescription('');
       setRecurrenceCount('');
       setIsBudgetGoal(false);
-      setGroupName('Geral');
+      setGroup('Geral');
     }
   }, [transactionToEdit, categories]);
 
@@ -49,7 +49,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
     if (!transactionToEdit && categoryId) {
       const selectedCat = categories.find(c => c.id === categoryId);
       if (selectedCat) {
-        setGroupName(selectedCat.name);
+        setGroup(selectedCat.name);
       }
     }
   }, [categoryId, categories, transactionToEdit]);
@@ -74,7 +74,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       dueDate,
       description,
       is_budget_goal: isBudgetGoal,
-      group_name: groupName || 'Geral'
+      group: group || 'Geral'
     };
 
     if (transactionToEdit) {
@@ -108,8 +108,8 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
         <input 
             id="planned-group" 
             list="planned-group-suggestions" 
-            value={groupName} 
-            onChange={e => setGroupName(e.target.value)} 
+            value={group} 
+            onChange={e => setGroup(e.target.value)} 
             placeholder="Ex: Contas de Casa, Lazer, Fixos"
             className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
         />

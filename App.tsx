@@ -309,7 +309,7 @@ const App: React.FC = () => {
 
   const uniquePlannedGroups = useMemo(() => {
     const groups = new Set<string>();
-    plannedTransactions.forEach(t => groups.add(t.group_name || 'Geral'));
+    plannedTransactions.forEach(t => groups.add(t.group || 'Geral'));
     return Array.from(groups).sort();
   }, [plannedTransactions]);
 
