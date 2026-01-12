@@ -22,7 +22,7 @@ export interface PlannedTransaction {
   status: 'pending' | 'paid';
   isGenerated?: boolean;
   is_budget_goal?: boolean; 
-  group_name?: string; 
+  group?: string; 
   recurrence_id?: string; // Novo campo para desvincular séries duplicadas
 }
 
@@ -55,7 +55,7 @@ export interface Investment {
     rateType: IndexerType;
     rateValue: number; // e.g., 100 (% of CDI), 6 (IPCA + 6%), 12 (12% PRE)
     categoryId: string; // Optional linkage to category for color/icon
-    group_name?: string; 
+    group?: string; 
 }
 
 export interface Category {
