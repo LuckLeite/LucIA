@@ -1,0 +1,5 @@
+{
+  "name": "Flux",
+  "description": "A comprehensive and functional personal finance control application, focused on recording, viewing, and managing financial transactions. It features detailed charts, budgeting tools, and an intuitive interface to help you master your finances.",
+  "requestFramePermissions": []
+}

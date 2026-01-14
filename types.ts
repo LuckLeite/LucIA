@@ -22,9 +22,9 @@ export interface PlannedTransaction {
   status: 'pending' | 'paid';
   isGenerated?: boolean;
   is_budget_goal?: boolean; 
-  group?: string; 
-  group_name?: string; // Adicionado para suportar a propriedade usada na UI
-  recurrence_id?: string; // Novo campo para desvincular séries duplicadas
+  group_name?: string; // Coluna oficial no Supabase
+  recurrence_id?: string;
+  isPersistentOverride?: boolean; // Flag interna para controle de sync
 }
 
 export interface CardTransaction {
@@ -56,7 +56,7 @@ export interface Investment {
     rateType: IndexerType;
     rateValue: number; // e.g., 100 (% of CDI), 6 (IPCA + 6%), 12 (12% PRE)
     categoryId: string; // Optional linkage to category for color/icon
-    group?: string; 
+    group_name?: string; 
 }
 
 export interface Category {

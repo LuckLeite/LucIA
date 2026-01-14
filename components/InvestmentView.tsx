@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Investment } from '../types';
 import InvestmentList from './InvestmentList';
@@ -40,14 +41,16 @@ const InvestmentView: React.FC<InvestmentViewProps> = ({ investments, onEdit, on
   // Derive unique groups
   const uniqueGroups = useMemo(() => {
       const groups = new Set<string>();
-      investments.forEach(inv => groups.add(inv.group || 'Geral'));
+      // Fix: changed 'group' to 'group_name' to match Investment type definition
+      investments.forEach(inv => groups.add(inv.group_name || 'Geral'));
       return Array.from(groups).sort();
   }, [investments]);
 
   // Filter investments for the chart based on selection
   const filteredInvestmentsForChart = useMemo(() => {
       if (selectedGroupFilter === 'Todos') return investments;
-      return investments.filter(inv => (inv.group || 'Geral') === selectedGroupFilter);
+      // Fix: changed 'group' to 'group_name' to match Investment type definition
+      return investments.filter(inv => (inv.group_name || 'Geral') === selectedGroupFilter);
   }, [investments, selectedGroupFilter]);
 
   const chartTotalBalance = filteredInvestmentsForChart.reduce((acc, curr) => acc + curr.currentBalance, 0);

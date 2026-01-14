@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Investment, InvestmentType, IndexerType } from '../types';
 
@@ -47,7 +48,8 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
       setLiquidity(investmentToEdit.liquidity || '');
       setRateType(investmentToEdit.rateType);
       setRateValue(String(investmentToEdit.rateValue));
-      setGroup(investmentToEdit.group || 'Geral');
+      // Fix: changed 'group' to 'group_name' to match Investment type definition
+      setGroup(investmentToEdit.group_name || 'Geral');
     } else {
       resetForm();
     }
@@ -161,7 +163,8 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
       rateType,
       rateValue: parseFloat(rateValue) || 0,
       categoryId: 'cat_expense_investment',
-      group: group || 'Geral'
+      // Fix: changed 'group' to 'group_name' to match Investment type definition
+      group_name: group || 'Geral'
     };
 
     if (investmentToEdit) {

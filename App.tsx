@@ -115,7 +115,6 @@ const App: React.FC = () => {
     if (!target) { deletePlannedTransaction(id); return; }
     setPlannedDeletionTarget(target);
     
-    // Busca precisão por recurrence_id
     const futures = plannedTransactions.filter(t => {
         const isMatch = target.recurrence_id 
             ? t.recurrence_id === target.recurrence_id 
@@ -139,24 +138,8 @@ const App: React.FC = () => {
     const { transaction, recurrenceCount } = data;
     try {
       if ('id' in transaction) { 
-        const target = plannedTransactions.find(t => t.id === (transaction as PlannedTransaction).id);
-        if (!target) return;
-
-        const futures = plannedTransactions.filter(t => {
-            const isMatch = target.recurrence_id 
-                ? t.recurrence_id === target.recurrence_id 
-                : (t.description === target.description && t.categoryId === target.categoryId);
-
-            return t.id !== target.id && isMatch && t.dueDate > target.dueDate;
-        });
-
-        if (futures.length > 0) {
-            setPlannedEditTarget(transaction as PlannedTransaction);
-            setPlannedEditCascadeModalOpen(true);
-        } else {
-            await updatePlannedTransaction(transaction as PlannedTransaction, false);
-            setPlannedFormModalOpen(false);
-        }
+        await updatePlannedTransaction(transaction as PlannedTransaction, false);
+        setPlannedFormModalOpen(false);
       } 
       else { 
         await addPlannedTransaction(transaction as Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount); 
@@ -208,8 +191,13 @@ const App: React.FC = () => {
 
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
   
+  // Filtramos apenas planejamentos manuais puros (sem chave de identidade AUTO_ ou prefixo gen_)
   const filteredPlannedTransactions = useMemo(() => 
-    plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && !pt.isGenerated), 
+    plannedTransactions.filter(pt => 
+        pt.dueDate.startsWith(monthPrefix) && 
+        !pt.isGenerated && 
+        !pt.group_name?.startsWith('AUTO_')
+    ), 
   [plannedTransactions, monthPrefix]);
 
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
@@ -225,18 +213,14 @@ const App: React.FC = () => {
       const baseList = [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement];
       
       return baseList.map(pt => {
-          let finalPt = { ...pt };
-
-          // REGRA DE BUMP: Se estiver pendente e for do passado, joga para amanhã visualmente
+          let finalPt = { ...pt } as PlannedTransaction;
           if (finalPt.status === 'pending' && finalPt.dueDate < todayISO) {
               finalPt.dueDate = tomorrowISO;
           }
-
           if (finalPt.is_budget_goal && finalPt.status === 'pending') {
               const spentInCategory = filteredTransactions
                   .filter(t => t.categoryId === finalPt.categoryId && t.type === finalPt.type)
                   .reduce((acc, curr) => acc + curr.amount, 0);
-              
               const remaining = Math.max(0, finalPt.amount - spentInCategory);
               finalPt.amount = remaining;
           }
@@ -309,7 +293,10 @@ const App: React.FC = () => {
 
   const uniquePlannedGroups = useMemo(() => {
     const groups = new Set<string>();
-    plannedTransactions.forEach(t => groups.add(t.group_name || 'Geral'));
+    plannedTransactions.forEach(t => {
+        const name = t.group_name || 'Geral';
+        if (!name.startsWith('AUTO_')) groups.add(name);
+    });
     return Array.from(groups).sort();
   }, [plannedTransactions]);
 

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Investment } from '../types';
 
@@ -25,11 +26,12 @@ const InvestmentList: React.FC<InvestmentListProps> = ({ investments, onEdit, on
     }
   }, [isEditing, investments]);
 
-  // Group investments by 'group' property
+  // Group investments by 'group_name' property
   const groupedInvestments = useMemo(() => {
     const groups: Record<string, Investment[]> = {};
     investments.forEach(inv => {
-        const groupName = inv.group || 'Geral';
+        // Fix: changed 'group' to 'group_name' to match Investment type definition
+        const groupName = inv.group_name || 'Geral';
         if (!groups[groupName]) {
             groups[groupName] = [];
         }
