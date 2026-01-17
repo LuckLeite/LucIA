@@ -355,7 +355,7 @@ const App: React.FC = () => {
                 <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>
             </>
         )}
-        {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onDuplicate={duplicatePlannedTransaction} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} />}
+        {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onDuplicate={duplicatePlannedTransaction} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} drawersOpenDefault={settings.plannedDrawersOpenDefault} />}
         {view === 'cards' && (
             <CardView 
                 transactions={cardTransactions} 

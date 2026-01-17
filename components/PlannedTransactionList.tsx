@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { PlannedTransaction, Category } from '../types';
 import { getIconComponent } from '../constants';
 
@@ -12,6 +12,7 @@ interface PlannedTransactionListProps {
   onDuplicate: (id: string) => void;
   onMarkAsPaid: (transaction: PlannedTransaction) => void;
   onUnmarkAsPaid: (transaction: PlannedTransaction) => void;
+  drawersOpenDefault?: boolean;
 }
 
 const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
@@ -99,10 +100,16 @@ const PlannedGroupDrawer: React.FC<{
     onDuplicate: (id: string) => void;
     onMarkAsPaid: (t: PlannedTransaction) => void;
     onUnmarkAsPaid: (t: PlannedTransaction) => void;
-}> = ({ groupName, items, categories, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid }) => {
-    // Agora inicia em false para que as bandejas fiquem fechadas ao abrir a tela
-    const [isOpen, setIsOpen] = useState(false);
+    initialOpen?: boolean;
+}> = ({ groupName, items, categories, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, initialOpen = false }) => {
+    // Usamos o initialOpen no estado inicial do useState
+    const [isOpen, setIsOpen] = useState(initialOpen);
     const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+
+    // Caso a configuração mude globalmente, atualizamos o estado local
+    useEffect(() => {
+        setIsOpen(initialOpen);
+    }, [initialOpen]);
 
     const stats = useMemo(() => {
         return items.reduce((acc, curr) => {
@@ -167,7 +174,7 @@ const PlannedGroupDrawer: React.FC<{
     );
 };
 
-const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ plannedTransactions, categories, onAdd, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid }) => {
+const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ plannedTransactions, categories, onAdd, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, drawersOpenDefault = false }) => {
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, PlannedTransaction[]> = {};
     plannedTransactions.forEach(pt => {
@@ -212,6 +219,7 @@ const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ planned
                 onDuplicate={onDuplicate}
                 onMarkAsPaid={onMarkAsPaid}
                 onUnmarkAsPaid={onUnmarkAsPaid}
+                initialOpen={drawersOpenDefault}
             />
         ))}
        </div>

@@ -8,6 +8,7 @@ const generateUUID = () => crypto.randomUUID();
 
 const DEFAULT_SETTINGS: AppSettings = {
     calculateTithing: false,
+    plannedDrawersOpenDefault: false,
 };
 
 export const useFinanceData = () => {
@@ -33,7 +34,6 @@ export const useFinanceData = () => {
     const syncItem = async (table: string, item: any, operation: 'upsert' | 'delete' = 'upsert') => {
         if (!supabase || !session) return;
         
-        // Itens virtuais puramente gerados não são sincronizados, a menos que marcados para persistência
         if (operation === 'upsert' && String(item.id).startsWith('gen_') && !item.isPersistentOverride) return;
         
         try {
@@ -41,7 +41,6 @@ export const useFinanceData = () => {
                 const { error } = await supabase.from(table).delete().eq('id', item.id);
                 if (error) throw error;
             } else {
-                // Removemos flags internas antes de enviar ao banco
                 const { isGenerated, isPersistentOverride, ...cleanItem } = item;
                 let dataToSync = { ...cleanItem, user_id: session.user.id };
                 
@@ -60,6 +59,7 @@ export const useFinanceData = () => {
         }
         setLoading(true);
         try {
+            // CRITICAL FIX: All queries MUST be filtered by user_id to avoid reading leaked global settings
             const [txs, pln, crd, creg, inv, cat, bud, set] = await Promise.all([
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
                 supabase.from('planned_transactions').select('*'),
@@ -68,7 +68,7 @@ export const useFinanceData = () => {
                 supabase.from('investments').select('*'),
                 supabase.from('categories').select('*').order('sort_order', { ascending: true }),
                 supabase.from('budgets').select('*'),
-                supabase.from('settings').select('*').single()
+                supabase.from('settings').select('*').eq('user_id', session.user.id).maybeSingle()
             ]);
 
             if (cat.data) {
@@ -96,7 +96,17 @@ export const useFinanceData = () => {
             if (creg.data) setCardRegistries(creg.data || []);
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
-            if (set.data) setSettings(set.data || DEFAULT_SETTINGS);
+            
+            // Robust settings mapping: prioritize user-specific row and handle case-insensitivity
+            if (set.data) {
+                const data = set.data;
+                setSettings({
+                    calculateTithing: data.calculateTithing ?? data.calculatetithing ?? DEFAULT_SETTINGS.calculateTithing,
+                    plannedDrawersOpenDefault: data.plannedDrawersOpenDefault ?? data.planneddrawersopendefault ?? DEFAULT_SETTINGS.plannedDrawersOpenDefault,
+                });
+            } else {
+                setSettings(DEFAULT_SETTINGS);
+            }
         } catch (e: any) {
             setError(e.message);
         } finally {
@@ -117,66 +127,56 @@ export const useFinanceData = () => {
     const movementCategoryExpense = useMemo(() => findCategoryByName('Movimento', 'expense'), [categories]);
     const movementCategoryIncome = useMemo(() => findCategoryByName('Movimento', 'income'), [categories]);
 
-    // Função para buscar se existe um registro persistente (ajuste ou baixa) para um item automático
     const getPersistentOverride = (key: string) => {
         return plannedTransactions.find(pt => pt.group_name === key);
     };
 
     const getGeneratedMovementForMonth = useCallback((monthPrefix: string): PlannedTransaction[] => {
         if (!movementCategoryExpense || !movementCategoryIncome) return [];
-        
         const identityKey = `AUTO_MOV_${monthPrefix}`;
         const override = getPersistentOverride(identityKey);
-
         const monthTransactions = transactions.filter(t => t.date.startsWith(monthPrefix));
         const movementOut = monthTransactions.filter(t => t.categoryId === movementCategoryExpense.id).reduce((sum, t) => sum + t.amount, 0);
         const movementIn = monthTransactions.filter(t => t.categoryId === movementCategoryIncome.id).reduce((sum, t) => sum + t.amount, 0);
-        
         const calculatedAmount = movementOut - movementIn;
         if (calculatedAmount <= 0 && !override) return [];
-
         return [{
             id: override?.id || `gen_mov_${monthPrefix}`,
             description: override?.description || 'Recurso Disponível (Banco Vivo)',
-            amount: calculatedAmount, // Valor sempre automático
+            amount: calculatedAmount,
             type: 'income' as const,
             categoryId: override?.categoryId || movementCategoryIncome.id,
             dueDate: override?.dueDate || `${monthPrefix}-01`,
             status: override?.status || 'pending',
             isGenerated: true,
-            group_name: identityKey // Usamos a chave de identidade estável
+            group_name: identityKey
         }];
     }, [transactions, movementCategoryExpense, movementCategoryIncome, plannedTransactions]);
 
     const generatedCardInvoices = useMemo(() => {
         if (!cardCategory) return [];
         const invoiceMap = new Map<string, PlannedTransaction>();
-        
         cardTransactions.forEach(ct => {
             const purchaseDate = new Date(ct.purchaseDate + 'T12:00:00Z');
             const registry = cardRegistries.find(r => r.name === ct.card);
             const dueDay = registry ? registry.due_day : 10;
             const installmentAmount = ct.totalAmount / ct.installments;
-
             for (let i = 1; i <= ct.installments; i++) {
                 const dueDate = new Date(purchaseDate);
                 dueDate.setUTCMonth(purchaseDate.getUTCMonth() + i);
                 dueDate.setUTCDate(dueDay);
-
                 const dateStr = dueDate.toISOString().split('T')[0];
                 const monthPrefix = dateStr.substring(0, 7);
                 const identityKey = `AUTO_CARD_${ct.card}_${monthPrefix}`;
-                
                 if (invoiceMap.has(identityKey)) {
                     invoiceMap.get(identityKey)!.amount += installmentAmount;
                 } else {
                     const override = getPersistentOverride(identityKey);
                     const displayDate = dueDate.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
-                    
                     invoiceMap.set(identityKey, {
                         id: override?.id || `gen_card_${identityKey}`,
                         description: override?.description || `Fatura ${ct.card} ${displayDate}`,
-                        amount: installmentAmount, // Valor base que será somado
+                        amount: installmentAmount,
                         type: 'expense',
                         categoryId: override?.categoryId || cardCategory.id,
                         dueDate: override?.dueDate || dateStr,
@@ -193,7 +193,6 @@ export const useFinanceData = () => {
     const generatedTithing = useMemo<PlannedTransaction[]>(() => {
         if (!settings.calculateTithing || !tithingCategory) return [];
         const monthlyIncomes = new Map<string, number>();
-        
         transactions.forEach(t => {
             if (t.type === 'income') {
                 const cat = categories.find(c => c.id === t.categoryId);
@@ -203,11 +202,9 @@ export const useFinanceData = () => {
                 }
             }
         });
-
         return Array.from(monthlyIncomes.entries()).map(([month, total]) => {
             const identityKey = `AUTO_TITH_${month}`;
             const override = getPersistentOverride(identityKey);
-            
             return {
                 id: override?.id || `gen_tith_${month}`,
                 description: override?.description || `Dízimo (${month})`,
@@ -297,22 +294,14 @@ export const useFinanceData = () => {
 
     const updatePlannedTransaction = async (pt: PlannedTransaction, updateFuture: boolean) => {
         const isVirtual = String(pt.id).startsWith('gen_');
-        
-        // Se for edição de item automático, garantimos que ele persistirá com a identidade estável no group_name
         let finalPt: PlannedTransaction;
         if (isVirtual) {
-            finalPt = { 
-                ...pt, 
-                id: generateUUID(), 
-                isGenerated: false,
-                isPersistentOverride: true 
-            };
+            finalPt = { ...pt, id: generateUUID(), isGenerated: false, isPersistentOverride: true };
             setPlannedTransactions(prev => [...prev, finalPt]);
         } else {
             finalPt = pt;
             setPlannedTransactions(prev => prev.map(p => p.id === pt.id ? finalPt : p));
         }
-
         if (!updateFuture) {
             await syncItem('planned_transactions', finalPt);
         } else {
@@ -348,7 +337,6 @@ export const useFinanceData = () => {
     };
 
     const markPlannedTransactionAsPaid = async (pt: PlannedTransaction) => {
-        // 1. Criar transação real no histórico
         await addTransaction({
             amount: pt.amount,
             type: pt.type,
@@ -356,8 +344,6 @@ export const useFinanceData = () => {
             date: new Date().toISOString().split('T')[0],
             description: pt.description
         });
-        
-        // 2. Persistir o status de Pago para silenciar o gerador
         const isVirtual = String(pt.id).startsWith('gen_');
         const finalPt: PlannedTransaction = {
             ...pt,
@@ -366,18 +352,15 @@ export const useFinanceData = () => {
             isGenerated: false,
             isPersistentOverride: true
         };
-
         if (isVirtual) {
             setPlannedTransactions(prev => [...prev, finalPt]);
         } else {
             setPlannedTransactions(prev => prev.map(p => p.id === pt.id ? finalPt : p));
         }
-        
         await syncItem('planned_transactions', finalPt);
     };
 
     const unmarkPlannedTransactionAsPaid = async (pt: PlannedTransaction) => {
-        // Se for um item de identidade estável (AUTO_...), voltamos ele para pending ou deletamos se for persistente
         if (pt.group_name?.startsWith('AUTO_')) {
             const updated = { ...pt, status: 'pending' as const };
             setPlannedTransactions(prev => prev.map(p => p.id === pt.id ? updated : p));
@@ -499,7 +482,16 @@ export const useFinanceData = () => {
 
     const updateSettings = async (newSettings: AppSettings) => {
         setSettings(newSettings);
-        if (supabase && session) await supabase.from('settings').upsert({ ...newSettings, id: 'user_settings', user_id: session.user.id });
+        if (supabase && session) {
+            // Using a unique ID scoped to user to avoid global conflicts shown in screenshot
+            const uniqueId = `settings_${session.user.id}`;
+            await supabase.from('settings').upsert({ 
+                id: uniqueId,
+                user_id: session.user.id,
+                calculateTithing: newSettings.calculateTithing,
+                plannedDrawersOpenDefault: newSettings.plannedDrawersOpenDefault
+            });
+        }
     };
 
     const totalBalance = useMemo(() => {

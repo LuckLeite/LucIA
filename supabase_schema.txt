@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS categories (
   color TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
   includeInTithing BOOLEAN DEFAULT true,
+  sort_order INTEGER DEFAULT 0,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -37,8 +38,9 @@ CREATE TABLE IF NOT EXISTS planned_transactions (
   dueDate DATE NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('pending', 'paid')),
   isGenerated BOOLEAN DEFAULT false,
-  "group" TEXT DEFAULT 'Geral',
-  isBudgetGoal BOOLEAN DEFAULT false,
+  group_name TEXT DEFAULT 'Geral',
+  is_budget_goal BOOLEAN DEFAULT false,
+  recurrence_id TEXT,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -54,7 +56,16 @@ CREATE TABLE IF NOT EXISTS card_transactions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 5. Tabela de Investimentos
+-- 5. Tabela de Registros de Cartões
+CREATE TABLE IF NOT EXISTS card_registries (
+  id TEXT PRIMARY KEY,
+  user_id UUID DEFAULT auth.uid(),
+  name TEXT NOT NULL,
+  due_day INTEGER NOT NULL DEFAULT 10,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 6. Tabela de Investimentos
 CREATE TABLE IF NOT EXISTS investments (
   id TEXT PRIMARY KEY,
   user_id UUID DEFAULT auth.uid(),
@@ -67,17 +78,7 @@ CREATE TABLE IF NOT EXISTS investments (
   rateType TEXT,
   rateValue NUMERIC,
   categoryId TEXT,
-  "group" TEXT DEFAULT 'Geral',
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- 6. Tabela de Orçamentos (Budgets)
-CREATE TABLE IF NOT EXISTS budgets (
-  id TEXT PRIMARY KEY,
-  user_id UUID DEFAULT auth.uid(),
-  categoryId TEXT REFERENCES categories(id),
-  "limit" NUMERIC NOT NULL,
-  period TEXT DEFAULT 'monthly',
+  group_name TEXT DEFAULT 'Geral',
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -85,7 +86,8 @@ CREATE TABLE IF NOT EXISTS budgets (
 CREATE TABLE IF NOT EXISTS settings (
   id TEXT PRIMARY KEY,
   user_id UUID DEFAULT auth.uid(),
-  calculateTithing BOOLEAN DEFAULT true,
+  calculateTithing BOOLEAN DEFAULT false,
+  plannedDrawersOpenDefault BOOLEAN DEFAULT false,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -94,8 +96,8 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE planned_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE card_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE card_registries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
 -- POLÍTICAS DE SEGURANÇA
@@ -111,11 +113,11 @@ CREATE POLICY "Users can only access their own planned_transactions" ON planned_
 DROP POLICY IF EXISTS "Users can only access their own card_transactions" ON card_transactions;
 CREATE POLICY "Users can only access their own card_transactions" ON card_transactions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can only access their own card_registries" ON card_registries;
+CREATE POLICY "Users can only access their own card_registries" ON card_registries FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Users can only access their own investments" ON investments;
 CREATE POLICY "Users can only access their own investments" ON investments FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can only access their own budgets" ON budgets;
-CREATE POLICY "Users can only access their own budgets" ON budgets FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can only access their own settings" ON settings;
 CREATE POLICY "Users can only access their own settings" ON settings FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

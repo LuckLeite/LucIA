@@ -78,6 +78,7 @@ export interface Budget {
 
 export interface AppSettings {
   calculateTithing: boolean;
+  plannedDrawersOpenDefault: boolean;
 }
 
 export type Theme = 'light' | 'dark';

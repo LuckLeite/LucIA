@@ -10,14 +10,17 @@ interface State {
   error?: Error;
 }
 
-// Standard Error Boundary component implementation.
-// Fixed by extending Component directly and using a constructor to ensure this.props is correctly typed and recognized by the compiler.
+/**
+ * Standard Error Boundary component implementation.
+ */
 class ErrorBoundary extends Component<Props, State> {
+  // Explicitly declare state as a class property for better TypeScript support.
+  public state: State = {
+    hasError: false
+  };
+
   constructor(props: Props) {
     super(props);
-    this.state = {
-      hasError: false
-    };
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -32,11 +35,12 @@ class ErrorBoundary extends Component<Props, State> {
 
   render() {
     // Access state and props from the class instance using 'this'.
+    // Fix: Using 'this.state' and 'this.props' to ensure property resolution.
     const { hasError, error } = this.state;
     const { children } = this.props;
 
     if (hasError) {
-      // You can render any custom fallback UI
+      // Fallback UI
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 p-4">
             <div className="text-center">

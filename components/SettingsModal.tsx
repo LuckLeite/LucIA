@@ -55,6 +55,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
         });
     };
 
+    const togglePlannedDrawers = () => {
+        updateSettings({
+            ...settings,
+            plannedDrawersOpenDefault: !settings.plannedDrawersOpenDefault
+        });
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Gerenciamento e Configurações">
             <div className="space-y-6">
@@ -73,6 +80,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, exportDa
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${settings.calculateTithing ? 'bg-primary-600' : 'bg-gray-200 dark:bg-slate-600'}`}
                         >
                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${settings.calculateTithing ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                     </div>
+
+                     <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-medium text-gray-800 dark:text-gray-200">Abas do planejado abertas ao iniciar</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Ao carregar o Flux, as gavetas do planejamento já estarão expandidas.</p>
+                        </div>
+                        <button 
+                            onClick={togglePlannedDrawers}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${settings.plannedDrawersOpenDefault ? 'bg-primary-600' : 'bg-gray-200 dark:bg-slate-600'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-200 ease-in-out ${settings.plannedDrawersOpenDefault ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
                      </div>
                 </div>
