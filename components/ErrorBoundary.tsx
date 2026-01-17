@@ -13,6 +13,7 @@ interface State {
 /**
  * Standard Error Boundary component implementation.
  */
+// Using named Component import to ensure props and state types are correctly inherited and recognized by the compiler
 class ErrorBoundary extends Component<Props, State> {
   // Explicitly declare state as a class property for better TypeScript support.
   public state: State = {
@@ -35,7 +36,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   render() {
     // Access state and props from the class instance using 'this'.
-    // Fix: Using 'this.state' and 'this.props' to ensure property resolution.
+    // Destructuring state and props correctly from 'this'
     const { hasError, error } = this.state;
     const { children } = this.props;
 

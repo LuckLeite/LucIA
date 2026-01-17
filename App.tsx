@@ -20,6 +20,7 @@ import CategoryForm from './components/CategoryForm';
 import InvestmentView from './components/InvestmentView';
 import InvestmentForm from './components/InvestmentForm';
 import FloatingCalculator from './components/FloatingCalculator';
+import AIChat from './components/AIChat';
 
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
 const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
@@ -43,6 +44,7 @@ const App: React.FC = () => {
   const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
   const [isCategoryFormOpen, setCategoryFormOpen] = useState(false);
   const [isInvestmentFormOpen, setInvestmentFormOpen] = useState(false);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [transactionToDeleteId, setTransactionToDeleteId] = useState<string | null>(null);
@@ -191,7 +193,6 @@ const App: React.FC = () => {
 
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
   
-  // Filtramos apenas planejamentos manuais puros (sem chave de identidade AUTO_ ou prefixo gen_)
   const filteredPlannedTransactions = useMemo(() => 
     plannedTransactions.filter(pt => 
         pt.dueDate.startsWith(monthPrefix) && 
@@ -330,8 +331,8 @@ const App: React.FC = () => {
                     <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronRightIcon /></button>
                 </div>
              )}
-             <button onClick={() => setImportModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ImportIcon /></button>
-             <button onClick={() => setSettingsModalOpen(true)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><SettingsIcon /></button>
+             <button onClick={() => setImportModalOpen(true)} title="Importar Extrato" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ImportIcon /></button>
+             <button onClick={() => setSettingsModalOpen(true)} title="Configurações" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><SettingsIcon /></button>
              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700">{theme === 'light' ? <MoonIcon /> : <SunIcon />}</button>
              <button onClick={handleLogout} className="p-2 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><LogoutIcon /></button>
           </div>
@@ -374,17 +375,37 @@ const App: React.FC = () => {
       </main>
       <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">Developed By Lucas Leite 🥛</footer>
       
-      <div className="fixed bottom-6 right-6 z-30">
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-3">
+        {/* IA Chat Button */}
+        <button 
+            onClick={() => setIsAIChatOpen(!isAIChatOpen)} 
+            className={`p-3 rounded-full shadow-lg transition-all flex items-center justify-center hover:scale-110 active:scale-95 bg-gradient-to-br from-primary-500 to-primary-700 text-white`}
+            title="Assistente Flux IA"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+        </button>
+
+        {/* Action Button */}
         <button onClick={() => {
             if (view === 'dashboard') handleAddTransactionClick();
             else if (view === 'planned') handleAddPlannedClick();
             else if (view === 'investments') handleAddInvestmentClick();
-        }} className="bg-primary-600 text-white font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-primary-700 flex items-center gap-2 transition-transform hover:scale-105">
+        }} className="bg-gray-800 dark:bg-white text-white dark:text-gray-900 font-semibold py-3 px-4 rounded-full shadow-lg hover:bg-gray-700 dark:hover:bg-gray-100 flex items-center gap-2 transition-transform hover:scale-105">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             <span className="hidden sm:inline">Adicionar</span>
         </button>
       </div>
+
       <FloatingCalculator />
+      <AIChat 
+        isOpen={isAIChatOpen} 
+        onClose={() => setIsAIChatOpen(false)} 
+        transactions={filteredTransactions} 
+        categories={categories} 
+        addTransaction={addTransaction}
+        currentBalance={currentMonthRealizedBalance}
+        currentMonthName={displayDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+      />
 
       <AllTransactionsModal isOpen={isAllTransactionsModalOpen} onClose={() => setAllTransactionsModalOpen(false)} transactions={filteredTransactions} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onDeleteMultiple={deleteMultipleTransactions} onUpdateCategoryMultiple={handleUpdateCategoryMultiple} />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 const FloatingCalculator: React.FC = () => {
@@ -44,7 +45,7 @@ const FloatingCalculator: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-24 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-36 right-6 z-50 flex flex-col items-end">
         {isOpen && (
             <div className="mb-4 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden animate-in slide-in-from-bottom-5">
                 <div className="bg-gray-100 dark:bg-slate-900 p-4 text-right">
