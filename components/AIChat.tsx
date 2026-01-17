@@ -40,7 +40,10 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, transactions, categori
         return total > 0 ? `${c.name}: R$ ${total.toFixed(2)}` : null;
     }).filter(Boolean).join(', ');
     
-    return `MÊS DE ANÁLISE: ${currentMonthName}. Saldo Realizado do Mês: R$ ${currentBalance.toFixed(2)}. Categorias Disponíveis: ${categories.map(c => c.name).join(', ')}. Resumo por Categoria neste mês: ${catSummary || 'Nenhum gasto registrado ainda'}. Lista de Transações de ${currentMonthName}:\n${monthTransactions || 'Sem transações este mês.'}`;
+    return `MÊS SENDO VISUALIZADO: ${currentMonthName}. 
+    Saldo REALIZADO deste mês específico: R$ ${currentBalance.toFixed(2)}. 
+    Resumo de gastos por categoria neste mês: ${catSummary || 'Nenhum gasto registrado ainda'}. 
+    Lista completa de transações enviadas para você deste mês:\n${monthTransactions || 'Sem transações este mês.'}`;
   }, [transactions, categories, currentBalance, currentMonthName]);
 
   const sendMessage = async (text: string) => {
@@ -54,19 +57,21 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, transactions, categori
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const systemInstruction = `
-        Você é o "Flux AI", um especialista em finanças pessoais integrado ao aplicativo Flux.
+        Você é o "Flux AI", um assistente financeiro de elite integrado ao app Flux.
         
-        FOCO DE ANÁLISE: 
-        Você deve analisar APENAS os dados do mês de ${currentMonthName} que o usuário está visualizando. Ignore meses passados a menos que o usuário pergunte explicitamente.
+        Sua principal missão é analisar os dados que o usuário está vendo na tela agora. 
+        O usuário está visualizando o Dashboard de: ${currentMonthName}.
         
-        CONTEXTO ATUAL DO DASHBOARD (Mês Selecionado: ${currentMonthName}):
+        DADOS EXCLUSIVOS DO MÊS ATUAL (${currentMonthName}):
         ${financialSummary}
 
-        REGRAS:
-        1. Se o usuário pedir para analisar, dê um veredito curto, direto e inteligente sobre a saúde financeira dele BASEADO NO MÊS ATUAL.
-        2. Se o usuário descrever um gasto ou ganho (ex: "gastei 50 no mercado"), identifique: valor, tipo (income/expense), descrição e a categoria mais provável das que existem no app.
-        3. Se detectar uma transação, SEMPRE responda no final da sua mensagem com a tag especial: [TRANSACTION:{"amount":50,"type":"expense","description":"Mercado","categoryName":"Alimentação"}]
-        4. Seja amigável e use emojis. Responda sempre em Português Brasileiro.
+        INSTRUÇÕES CRÍTICAS:
+        1. Toda e qualquer análise deve ser feita APENAS com base nos dados fornecidos acima. Não invente gastos passados ou futuros.
+        2. Se o saldo estiver negativo ou o usuário estiver gastando muito em uma categoria, seja direto mas encorajador.
+        3. Se o usuário disser algo como "paguei 30 de uber", você deve sugerir o lançamento.
+        4. Quando sugerir um lançamento, você DEVE incluir no FINAL da sua resposta a tag: [TRANSACTION:{"amount":30,"type":"expense","description":"Uber","categoryName":"Transporte"}]
+        5. Certifique-se de que o "categoryName" na tag combine com uma das categorias reais do app: ${categories.map(c => c.name).join(', ')}.
+        6. Responda de forma humanizada, amigável e use emojis. Idioma: Português Brasileiro.
       `;
 
       const response = await ai.models.generateContent({
@@ -74,7 +79,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, transactions, categori
         contents: text,
         config: {
           systemInstruction,
-          temperature: 0.7,
+          temperature: 0.6,
         },
       });
 
@@ -122,7 +127,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, transactions, categori
             <div className="p-1.5 bg-white/20 rounded-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
             </div>
-            <h2 className="font-bold">Flux AI ({currentMonthName})</h2>
+            <h2 className="font-bold">Assistente Flux ({currentMonthName})</h2>
         </div>
         <button onClick={onClose} className="hover:bg-white/10 p-1 rounded transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -182,7 +187,7 @@ const AIChat: React.FC<AIChatProps> = ({ isOpen, onClose, transactions, categori
             type="text" 
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ex: Gastei 15 reais no café hoje..."
+            placeholder="Ex: Paguei 15 reais de café hoje..."
             className="flex-1 p-3 bg-gray-100 dark:bg-slate-900 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary-500 outline-none"
           />
           <button 
