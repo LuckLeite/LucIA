@@ -13,8 +13,8 @@ interface State {
 /**
  * Standard Error Boundary component implementation.
  */
-// Fix: Extending React.Component explicitly to ensure props and state types are correctly recognized by the TypeScript compiler.
-class ErrorBoundary extends React.Component<Props, State> {
+// Fix: Extending Component directly to ensure props and state types are correctly recognized by the TypeScript compiler.
+class ErrorBoundary extends Component<Props, State> {
   // Explicitly declare state as a class property for better TypeScript support.
   public state: State = {
     hasError: false

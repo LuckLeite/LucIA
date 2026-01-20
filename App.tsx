@@ -27,7 +27,7 @@ const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height
 const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
 const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 const ImportIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 13V3"/><path d="m8 9 4-4 4 4"/><path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5"/></svg>;
-const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1-2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1-2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1-2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
 const LogoutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const App: React.FC = () => {
@@ -231,7 +231,8 @@ const App: React.FC = () => {
       
       return baseList.map(pt => {
           let finalPt = { ...pt } as PlannedTransaction;
-          if (finalPt.status === 'pending' && finalPt.dueDate < todayISO) {
+          // MODIFICAÇÃO: Incluído o '=' para que itens que vencem HOJE também sejam empurrados para AMANHÃ se estiverem pendentes.
+          if (finalPt.status === 'pending' && finalPt.dueDate <= todayISO) {
               finalPt.dueDate = tomorrowISO;
           }
           if (finalPt.is_budget_goal && finalPt.status === 'pending') {
@@ -253,13 +254,12 @@ const App: React.FC = () => {
   }, [transactions]);
 
   const balanceChartData = useMemo(() => {
-    const todayISO = new Date().toISOString().split('T')[0];
-    const firstDayOfMonthISO = `${monthPrefix}-01`;
-    
-    const startBalance = transactions
-        .filter(tx => tx.date < firstDayOfMonthISO)
-        .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
+    const today = new Date();
+    const todayISO = today.toISOString().split('T')[0];
+    const displayMonthPrefix = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}`;
+    const daysInDisplayMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
 
+    // Agrupamos mudanças reais e planejadas por dia para o mês selecionado
     const dailyRealChanges = new Map<number, number>();
     filteredTransactions.forEach(tx => {
         const day = parseInt(tx.date.split('-')[2], 10);
@@ -267,33 +267,80 @@ const App: React.FC = () => {
         dailyRealChanges.set(day, (dailyRealChanges.get(day) || 0) + change);
     });
 
-    const dailyProjectedChanges = new Map<number, number>();
+    const dailyPlannedChanges = new Map<number, number>();
     combinedPlannedTransactions
         .filter(pt => pt.status === 'pending')
         .forEach(pt => {
             const day = parseInt(pt.dueDate.split('-')[2], 10);
             const change = pt.type === 'income' ? pt.amount : -pt.amount;
-            dailyProjectedChanges.set(day, (dailyProjectedChanges.get(day) || 0) + change);
+            dailyPlannedChanges.set(day, (dailyPlannedChanges.get(day) || 0) + change);
         });
 
-    const daysInMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
-    const fullChartData = [];
-    let runningBalance = startBalance;
+    const fullChartData: { date: string, balance: number }[] = [];
+    const dailyBalances: Record<number, number> = {};
 
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dayISO = `${monthPrefix}-${String(day).padStart(2, '0')}`;
-        
-        if (dayISO <= todayISO) {
-            runningBalance += dailyRealChanges.get(day) || 0;
-        } else {
-            runningBalance += dailyProjectedChanges.get(day) || 0;
+    // --- LOGICA DE ANCORAGEM NO HOJE ---
+    if (displayMonthPrefix === todayISO.substring(0, 7)) {
+        // MÊS ATUAL:
+        const todayDay = today.getDate();
+        dailyBalances[todayDay] = totalBalance; // Âncora: Saldo real HOJE no fim do dia
+
+        // Caminha para TRÁS de hoje até o dia 1 (considerando apenas o que já aconteceu)
+        for (let d = todayDay - 1; d >= 0; d--) {
+            // d=0 representará o ponto 'Ini'
+            const changeNextDay = dailyRealChanges.get(d + 1) || 0;
+            dailyBalances[d] = dailyBalances[d+1] - changeNextDay;
         }
+
+        // Caminha para FRENTE de hoje até o fim do mês (considerando o que está planejado)
+        for (let d = todayDay + 1; d <= daysInDisplayMonth; d++) {
+            const changeThisDay = dailyPlannedChanges.get(d) || 0;
+            dailyBalances[d] = dailyBalances[d-1] + changeThisDay;
+        }
+    } 
+    else if (displayMonthPrefix < todayISO.substring(0, 7)) {
+        // MÊS PASSADO:
+        // 1. Descobrir o saldo de fechamento daquele mês baseando-se em hoje.
+        const realizedBetweenThenAndNow = transactions
+            .filter(tx => tx.date > `${displayMonthPrefix}-${daysInDisplayMonth}` && tx.date <= todayISO)
+            .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
         
-        fullChartData.push({ date: `${String(day).padStart(2, '0')}`, balance: runningBalance });
+        const monthClosingBalance = totalBalance - realizedBetweenThenAndNow;
+        dailyBalances[daysInDisplayMonth] = monthClosingBalance;
+
+        // Caminha para trás usando apenas transações reais daquele mês
+        for (let d = daysInDisplayMonth - 1; d >= 0; d--) {
+            const changeNextDay = dailyRealChanges.get(d + 1) || 0;
+            dailyBalances[d] = dailyBalances[d+1] - changeNextDay;
+        }
+    } 
+    else {
+        // MÊS FUTURO:
+        // 1. Descobrir o saldo de abertura baseado em hoje + tudo o que planejo gastar até lá.
+        const plannedBetweenNowAndStart = [
+            ...plannedTransactions.filter(pt => pt.status === 'pending' && pt.dueDate >= todayISO && pt.dueDate < `${displayMonthPrefix}-01`),
+            ...generatedCardInvoices.filter(pt => pt.status === 'pending' && pt.dueDate >= todayISO && pt.dueDate < `${displayMonthPrefix}-01`),
+            ...generatedTithing.filter(pt => pt.status === 'pending' && pt.dueDate >= todayISO && pt.dueDate < `${displayMonthPrefix}-01`),
+        ].reduce((acc, pt) => pt.type === 'income' ? acc + pt.amount : acc - pt.amount, 0);
+
+        const monthOpeningBalance = totalBalance + plannedBetweenNowAndStart;
+        dailyBalances[0] = monthOpeningBalance; // Ponto 'Ini'
+
+        // Caminha para frente usando planejamentos do mês futuro
+        for (let d = 1; d <= daysInDisplayMonth; d++) {
+            const changeThisDay = dailyPlannedChanges.get(d) || 0;
+            dailyBalances[d] = dailyBalances[d-1] + changeThisDay;
+        }
+    }
+
+    // Formata para o Recharts
+    fullChartData.push({ date: 'Ini', balance: dailyBalances[0] });
+    for (let d = 1; d <= daysInDisplayMonth; d++) {
+        fullChartData.push({ date: String(d).padStart(2, '0'), balance: dailyBalances[d] });
     }
 
     return fullChartData;
-  }, [transactions, filteredTransactions, combinedPlannedTransactions, monthPrefix, displayDate]);
+  }, [transactions, plannedTransactions, filteredTransactions, combinedPlannedTransactions, displayDate, totalBalance, generatedCardInvoices, generatedTithing]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
