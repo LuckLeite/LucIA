@@ -32,6 +32,7 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setDescription(transactionToEdit.description);
       setIsBudgetGoal(transactionToEdit.is_budget_goal || false);
       setGroupName(transactionToEdit.group_name || 'Geral');
+      setRecurrenceCount(''); // Resetado na edição para ser usado como "extensão"
     } else {
       setAmount('');
       setType('expense');
@@ -44,7 +45,6 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
     }
   }, [transactionToEdit, categories]);
 
-  // Efeito para sincronizar o nome do grupo com a categoria selecionada (apenas para novos itens)
   useEffect(() => {
     if (!transactionToEdit && categoryId) {
       const selectedCat = categories.find(c => c.id === categoryId);
@@ -67,6 +67,9 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       alert("Por favor, preencha todos os campos obrigatórios.");
       return;
     }
+    
+    const count = parseInt(recurrenceCount, 10) || 0;
+
     const transactionData = {
       amount: parseFloat(amount),
       type,
@@ -74,13 +77,13 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       dueDate,
       description,
       is_budget_goal: isBudgetGoal,
-      group_name: groupName || 'Geral'
+      group_name: groupName || 'Geral',
+      recurrence_id: transactionToEdit?.recurrence_id
     };
 
     if (transactionToEdit) {
-      onSubmit({ transaction: { ...transactionData, id: transactionToEdit.id, status: transactionToEdit.status }, recurrenceCount: 0 });
+      onSubmit({ transaction: { ...transactionData, id: transactionToEdit.id, status: transactionToEdit.status }, recurrenceCount: count });
     } else {
-      const count = parseInt(recurrenceCount, 10) || 0;
       onSubmit({ transaction: transactionData, recurrenceCount: count });
     }
   };
@@ -151,22 +154,20 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"/>
       </div>
       
-      {!transactionToEdit && (
-        <div className="pt-2">
-           <label htmlFor="recurrence" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Repetir para os próximos meses
-          </label>
-          <input 
-            type="number"
-            id="recurrence"
-            value={recurrenceCount}
-            onChange={e => setRecurrenceCount(e.target.value)}
-            min="0"
-            placeholder="0"
-            className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-          />
-        </div>
-      )}
+      <div className="pt-2">
+          <label htmlFor="recurrence" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {transactionToEdit ? 'Adicionar mais X meses de repetição' : 'Repetir para os próximos meses'}
+        </label>
+        <input 
+          type="number"
+          id="recurrence"
+          value={recurrenceCount}
+          onChange={e => setRecurrenceCount(e.target.value)}
+          min="0"
+          placeholder="0"
+          className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+        />
+      </div>
 
       <div className="flex justify-end pt-2">
         <button type="submit" className="w-full bg-primary-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">

@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [isPlannedEditCascadeModalOpen, setPlannedEditCascadeModalOpen] = useState(false);
   const [plannedDeletionTarget, setPlannedDeletionTarget] = useState<PlannedTransaction | null>(null);
   const [plannedEditTarget, setPlannedEditTarget] = useState<PlannedTransaction | null>(null);
+  const [pendingRecurrenceCount, setPendingRecurrenceCount] = useState(0);
   const [hasFutureMatches, setHasFutureMatches] = useState(false);
 
   useEffect(() => {
@@ -140,8 +141,22 @@ const App: React.FC = () => {
     const { transaction, recurrenceCount } = data;
     try {
       if ('id' in transaction) { 
-        await updatePlannedTransaction(transaction as PlannedTransaction, false);
-        setPlannedFormModalOpen(false);
+        const pt = transaction as PlannedTransaction;
+        // Verifica se há itens futuros para oferecer a edição em cascata
+        const futures = plannedTransactions.filter(t => 
+            pt.recurrence_id 
+                ? (t.recurrence_id === pt.recurrence_id && t.dueDate > pt.dueDate)
+                : (t.description === pt.description && t.categoryId === pt.categoryId && t.dueDate > pt.dueDate)
+        );
+
+        if (futures.length > 0) {
+            setPlannedEditTarget(pt);
+            setPendingRecurrenceCount(recurrenceCount);
+            setPlannedEditCascadeModalOpen(true);
+        } else {
+            await updatePlannedTransaction(pt, false, recurrenceCount);
+            setPlannedFormModalOpen(false);
+        }
       } 
       else { 
         await addPlannedTransaction(transaction as Omit<PlannedTransaction, 'id' | 'status'>, recurrenceCount); 
@@ -152,9 +167,10 @@ const App: React.FC = () => {
 
   const handleConfirmEditPlanned = async (updateFuture: boolean) => {
       if (plannedEditTarget) {
-          await updatePlannedTransaction(plannedEditTarget, updateFuture);
+          await updatePlannedTransaction(plannedEditTarget, updateFuture, pendingRecurrenceCount);
           setPlannedEditCascadeModalOpen(false);
           setPlannedEditTarget(null);
+          setPendingRecurrenceCount(0);
           setPlannedFormModalOpen(false);
       }
   };

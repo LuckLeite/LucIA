@@ -59,7 +59,6 @@ export const useFinanceData = () => {
         }
         setLoading(true);
         try {
-            // CRITICAL FIX: All queries MUST be filtered by user_id to avoid reading leaked global settings
             const [txs, pln, crd, creg, inv, cat, bud, set] = await Promise.all([
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
                 supabase.from('planned_transactions').select('*'),
@@ -97,7 +96,6 @@ export const useFinanceData = () => {
             if (inv.data) setInvestments(inv.data);
             if (bud.data) setBudgets(bud.data);
             
-            // Robust settings mapping: prioritize user-specific row and handle case-insensitivity
             if (set.data) {
                 const data = set.data;
                 setSettings({
@@ -272,7 +270,7 @@ export const useFinanceData = () => {
     };
 
     const addPlannedTransaction = async (pt: Omit<PlannedTransaction, 'id' | 'status'>, recurrence: number = 0) => {
-        const recurrence_id = recurrence > 0 ? generateUUID() : undefined;
+        const recurrence_id = pt.recurrence_id || generateUUID();
         const pts: PlannedTransaction[] = [];
         for (let i = 0; i <= recurrence; i++) {
             const date = new Date(pt.dueDate + 'T12:00:00Z');
@@ -292,9 +290,10 @@ export const useFinanceData = () => {
         }
     };
 
-    const updatePlannedTransaction = async (pt: PlannedTransaction, updateFuture: boolean) => {
+    const updatePlannedTransaction = async (pt: PlannedTransaction, updateFuture: boolean, extensionCount: number = 0) => {
         const isVirtual = String(pt.id).startsWith('gen_');
         let finalPt: PlannedTransaction;
+        
         if (isVirtual) {
             finalPt = { ...pt, id: generateUUID(), isGenerated: false, isPersistentOverride: true };
             setPlannedTransactions(prev => [...prev, finalPt]);
@@ -302,21 +301,55 @@ export const useFinanceData = () => {
             finalPt = pt;
             setPlannedTransactions(prev => prev.map(p => p.id === pt.id ? finalPt : p));
         }
+
+        // Lógica de Atualização (Cascata ou Simples)
         if (!updateFuture) {
             await syncItem('planned_transactions', finalPt);
         } else {
             const target = plannedTransactions.find(p => p.id === pt.id);
             if (!target) return;
+
+            // Busca todos os itens da mesma série que vencem no futuro
             const matches = plannedTransactions.filter(p => 
-                (target.recurrence_id && p.recurrence_id === target.recurrence_id && p.dueDate >= target.dueDate) ||
-                (!target.recurrence_id && p.description === target.description && p.dueDate >= target.dueDate)
+                (finalPt.recurrence_id && p.recurrence_id === finalPt.recurrence_id && p.dueDate >= finalPt.dueDate) ||
+                (!finalPt.recurrence_id && p.description === target.description && p.dueDate >= finalPt.dueDate)
             );
-            const updates = matches.map(m => ({ ...finalPt, id: m.id, dueDate: m.dueDate }));
+
+            // Se o item original não tinha recurrence_id mas estamos fazendo cascata, vamos atribuir um agora
+            const newRecurrenceId = finalPt.recurrence_id || generateUUID();
+
+            const updates = matches.map(m => ({ 
+                ...finalPt, 
+                id: m.id, 
+                dueDate: m.dueDate,
+                recurrence_id: newRecurrenceId 
+            }));
+
             setPlannedTransactions(prev => prev.map(p => {
                 const up = updates.find(u => u.id === p.id);
                 return up ? up : p;
             }));
-            if (supabase && session) await supabase.from('planned_transactions').upsert(updates.map(u => ({ ...u, user_id: session.user.id })));
+
+            if (supabase && session) {
+                await supabase.from('planned_transactions').upsert(updates.map(u => ({ ...u, user_id: session.user.id })));
+            }
+        }
+
+        // Lógica de Extensão (Adicionar mais meses)
+        if (extensionCount > 0) {
+            // Descobre qual o último vencimento da série atual
+            const serieItems = plannedTransactions.filter(p => 
+                (finalPt.recurrence_id && p.recurrence_id === finalPt.recurrence_id) ||
+                (!finalPt.recurrence_id && p.description === finalPt.description && p.categoryId === finalPt.categoryId)
+            );
+            
+            const lastDateStr = serieItems.reduce((last, curr) => curr.dueDate > last ? curr.dueDate : last, finalPt.dueDate);
+            
+            await addPlannedTransaction({
+                ...finalPt,
+                dueDate: lastDateStr,
+                recurrence_id: finalPt.recurrence_id
+            }, extensionCount);
         }
     };
 
@@ -483,7 +516,6 @@ export const useFinanceData = () => {
     const updateSettings = async (newSettings: AppSettings) => {
         setSettings(newSettings);
         if (supabase && session) {
-            // Using a unique ID scoped to user to avoid global conflicts shown in screenshot
             const uniqueId = `settings_${session.user.id}`;
             await supabase.from('settings').upsert({ 
                 id: uniqueId,
