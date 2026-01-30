@@ -249,37 +249,47 @@ const App: React.FC = () => {
     const displayMonthPrefix = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}`;
     const daysInDisplayMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
 
-    // LÓGICA DE FLUXO CONTÍNUO (CHAINING)
-    // Para qualquer dia X, o saldo é: Saldo Atual - (Realizados após X) + (Pendentes entre Hoje e X)
+    // LÓGICA PROGRESSIVA (SENSÍVEL À DATA)
+    // Resolve o bug: Receber em fevereiro não altera o saldo de Janeiro.
     const calculateBalanceAt = (dateISO: string) => {
-        const realizedAfter = transactions
-            .filter(tx => tx.date > dateISO && tx.date <= todayISO)
-            .reduce((acc, tx) => tx.type === 'income' ? acc - tx.amount : acc + tx.amount, 0);
+        // Se a data do gráfico é passado ou hoje:
+        if (dateISO <= todayISO) {
+            // Saldo histórico: apenas o que aconteceu DE FATO até aquele dia específico.
+            // Ignora qualquer transação futura.
+            return transactions
+                .filter(tx => tx.date <= dateISO)
+                .reduce((sum, tx) => tx.type === 'income' ? sum + tx.amount : sum - tx.amount, 0);
+        } 
+        // Se a data do gráfico é futura:
+        else {
+            // Projeção: Saldo Real Hoje + Pendências planejadas entre hoje e a data alvo.
+            const realizedBalanceToday = transactions
+                .filter(tx => tx.date <= todayISO)
+                .reduce((sum, tx) => tx.type === 'income' ? sum + tx.amount : sum - tx.amount, 0);
+            
+            // Soma as pendências futuras (Planned) até o dia do gráfico
+            const futurePendingSum = combinedPlannedTransactions
+                .filter(pt => pt.status === 'pending' && pt.dueDate > todayISO && pt.dueDate <= dateISO)
+                .reduce((acc, pt) => pt.type === 'income' ? acc + pt.amount : acc - pt.amount, 0);
 
-        const pendingUntil = [
-            ...plannedTransactions,
-            ...generatedCardInvoices,
-            ...generatedTithing,
-        ].filter(pt => pt.status === 'pending' && pt.dueDate > todayISO && pt.dueDate <= dateISO)
-         .reduce((acc, pt) => pt.type === 'income' ? acc + pt.amount : acc - pt.amount, 0);
-
-        return totalBalance + realizedAfter + pendingUntil;
+            return realizedBalanceToday + futurePendingSum;
+        }
     };
 
     const fullChartData: { date: string, balance: number }[] = [];
     
-    // Ponto Inicial (Dia 0 / Ini)
+    // Ponto Inicial (Dia 0 / Ini) - Saldo de fechamento do mês anterior
     const lastDayPrevMonth = new Date(displayDate.getFullYear(), displayDate.getMonth(), 0).toISOString().split('T')[0];
     fullChartData.push({ date: 'Ini', balance: calculateBalanceAt(lastDayPrevMonth) });
 
-    // Cada dia do mês
+    // Cada dia do mês visualizado
     for (let d = 1; d <= daysInDisplayMonth; d++) {
         const currentISO = `${displayMonthPrefix}-${String(d).padStart(2, '0')}`;
         fullChartData.push({ date: String(d).padStart(2, '0'), balance: calculateBalanceAt(currentISO) });
     }
 
     return fullChartData;
-  }, [transactions, plannedTransactions, displayDate, totalBalance, generatedCardInvoices, generatedTithing]);
+  }, [transactions, combinedPlannedTransactions, displayDate]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
