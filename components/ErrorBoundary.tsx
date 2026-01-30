@@ -13,7 +13,7 @@ interface State {
 /**
  * Standard Error Boundary component implementation.
  */
-// Fix: Extending Component directly to ensure props and state types are correctly recognized by the TypeScript compiler.
+// Fix: Extending Component directly from react to ensure props and state types are correctly recognized.
 class ErrorBoundary extends Component<Props, State> {
   // Explicitly declare state as a class property for better TypeScript support.
   public state: State = {

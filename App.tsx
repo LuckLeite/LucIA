@@ -142,7 +142,6 @@ const App: React.FC = () => {
     try {
       if ('id' in transaction) { 
         const pt = transaction as PlannedTransaction;
-        // Verifica se há itens futuros para oferecer a edição em cascata
         const futures = plannedTransactions.filter(t => 
             pt.recurrence_id 
                 ? (t.recurrence_id === pt.recurrence_id && t.dueDate > pt.dueDate)
@@ -208,15 +207,7 @@ const App: React.FC = () => {
   }, [displayDate]);
 
   const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
-  
-  const filteredPlannedTransactions = useMemo(() => 
-    plannedTransactions.filter(pt => 
-        pt.dueDate.startsWith(monthPrefix) && 
-        !pt.isGenerated && 
-        !pt.group_name?.startsWith('AUTO_')
-    ), 
-  [plannedTransactions, monthPrefix]);
-
+  const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && !pt.isGenerated && !pt.group_name?.startsWith('AUTO_')), [plannedTransactions, monthPrefix]);
   const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
   const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
   const filteredMovement = useMemo(() => getGeneratedMovementForMonth(monthPrefix), [getGeneratedMovementForMonth, monthPrefix]);
@@ -231,7 +222,6 @@ const App: React.FC = () => {
       
       return baseList.map(pt => {
           let finalPt = { ...pt } as PlannedTransaction;
-          // MODIFICAÇÃO: Incluído o '=' para que itens que vencem HOJE também sejam empurrados para AMANHÃ se estiverem pendentes.
           if (finalPt.status === 'pending' && finalPt.dueDate <= todayISO) {
               finalPt.dueDate = tomorrowISO;
           }
@@ -259,88 +249,37 @@ const App: React.FC = () => {
     const displayMonthPrefix = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}`;
     const daysInDisplayMonth = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 0).getDate();
 
-    // Agrupamos mudanças reais e planejadas por dia para o mês selecionado
-    const dailyRealChanges = new Map<number, number>();
-    filteredTransactions.forEach(tx => {
-        const day = parseInt(tx.date.split('-')[2], 10);
-        const change = tx.type === 'income' ? tx.amount : -tx.amount;
-        dailyRealChanges.set(day, (dailyRealChanges.get(day) || 0) + change);
-    });
+    // LÓGICA DE FLUXO CONTÍNUO (CHAINING)
+    // Para qualquer dia X, o saldo é: Saldo Atual - (Realizados após X) + (Pendentes entre Hoje e X)
+    const calculateBalanceAt = (dateISO: string) => {
+        const realizedAfter = transactions
+            .filter(tx => tx.date > dateISO && tx.date <= todayISO)
+            .reduce((acc, tx) => tx.type === 'income' ? acc - tx.amount : acc + tx.amount, 0);
 
-    const dailyPlannedChanges = new Map<number, number>();
-    combinedPlannedTransactions
-        .filter(pt => pt.status === 'pending')
-        .forEach(pt => {
-            const day = parseInt(pt.dueDate.split('-')[2], 10);
-            const change = pt.type === 'income' ? pt.amount : -pt.amount;
-            dailyPlannedChanges.set(day, (dailyPlannedChanges.get(day) || 0) + change);
-        });
+        const pendingUntil = [
+            ...plannedTransactions,
+            ...generatedCardInvoices,
+            ...generatedTithing,
+        ].filter(pt => pt.status === 'pending' && pt.dueDate > todayISO && pt.dueDate <= dateISO)
+         .reduce((acc, pt) => pt.type === 'income' ? acc + pt.amount : acc - pt.amount, 0);
+
+        return totalBalance + realizedAfter + pendingUntil;
+    };
 
     const fullChartData: { date: string, balance: number }[] = [];
-    const dailyBalances: Record<number, number> = {};
+    
+    // Ponto Inicial (Dia 0 / Ini)
+    const lastDayPrevMonth = new Date(displayDate.getFullYear(), displayDate.getMonth(), 0).toISOString().split('T')[0];
+    fullChartData.push({ date: 'Ini', balance: calculateBalanceAt(lastDayPrevMonth) });
 
-    // --- LOGICA DE ANCORAGEM NO HOJE ---
-    if (displayMonthPrefix === todayISO.substring(0, 7)) {
-        // MÊS ATUAL:
-        const todayDay = today.getDate();
-        dailyBalances[todayDay] = totalBalance; // Âncora: Saldo real HOJE no fim do dia
-
-        // Caminha para TRÁS de hoje até o dia 1 (considerando apenas o que já aconteceu)
-        for (let d = todayDay - 1; d >= 0; d--) {
-            // d=0 representará o ponto 'Ini'
-            const changeNextDay = dailyRealChanges.get(d + 1) || 0;
-            dailyBalances[d] = dailyBalances[d+1] - changeNextDay;
-        }
-
-        // Caminha para FRENTE de hoje até o fim do mês (considerando o que está planejado)
-        for (let d = todayDay + 1; d <= daysInDisplayMonth; d++) {
-            const changeThisDay = dailyPlannedChanges.get(d) || 0;
-            dailyBalances[d] = dailyBalances[d-1] + changeThisDay;
-        }
-    } 
-    else if (displayMonthPrefix < todayISO.substring(0, 7)) {
-        // MÊS PASSADO:
-        // 1. Descobrir o saldo de fechamento daquele mês baseando-se em hoje.
-        const realizedBetweenThenAndNow = transactions
-            .filter(tx => tx.date > `${displayMonthPrefix}-${daysInDisplayMonth}` && tx.date <= todayISO)
-            .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
-        
-        const monthClosingBalance = totalBalance - realizedBetweenThenAndNow;
-        dailyBalances[daysInDisplayMonth] = monthClosingBalance;
-
-        // Caminha para trás usando apenas transações reais daquele mês
-        for (let d = daysInDisplayMonth - 1; d >= 0; d--) {
-            const changeNextDay = dailyRealChanges.get(d + 1) || 0;
-            dailyBalances[d] = dailyBalances[d+1] - changeNextDay;
-        }
-    } 
-    else {
-        // MÊS FUTURO:
-        // 1. Descobrir o saldo de abertura baseado em hoje + tudo o que planejo gastar até lá.
-        const plannedBetweenNowAndStart = [
-            ...plannedTransactions.filter(pt => pt.status === 'pending' && pt.dueDate >= todayISO && pt.dueDate < `${displayMonthPrefix}-01`),
-            ...generatedCardInvoices.filter(pt => pt.status === 'pending' && pt.dueDate >= todayISO && pt.dueDate < `${displayMonthPrefix}-01`),
-            ...generatedTithing.filter(pt => pt.status === 'pending' && pt.dueDate >= todayISO && pt.dueDate < `${displayMonthPrefix}-01`),
-        ].reduce((acc, pt) => pt.type === 'income' ? acc + pt.amount : acc - pt.amount, 0);
-
-        const monthOpeningBalance = totalBalance + plannedBetweenNowAndStart;
-        dailyBalances[0] = monthOpeningBalance; // Ponto 'Ini'
-
-        // Caminha para frente usando planejamentos do mês futuro
-        for (let d = 1; d <= daysInDisplayMonth; d++) {
-            const changeThisDay = dailyPlannedChanges.get(d) || 0;
-            dailyBalances[d] = dailyBalances[d-1] + changeThisDay;
-        }
-    }
-
-    // Formata para o Recharts
-    fullChartData.push({ date: 'Ini', balance: dailyBalances[0] });
+    // Cada dia do mês
     for (let d = 1; d <= daysInDisplayMonth; d++) {
-        fullChartData.push({ date: String(d).padStart(2, '0'), balance: dailyBalances[d] });
+        const currentISO = `${displayMonthPrefix}-${String(d).padStart(2, '0')}`;
+        fullChartData.push({ date: String(d).padStart(2, '0'), balance: calculateBalanceAt(currentISO) });
     }
 
     return fullChartData;
-  }, [transactions, plannedTransactions, filteredTransactions, combinedPlannedTransactions, displayDate, totalBalance, generatedCardInvoices, generatedTithing]);
+  }, [transactions, plannedTransactions, displayDate, totalBalance, generatedCardInvoices, generatedTithing]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
@@ -439,7 +378,6 @@ const App: React.FC = () => {
       <footer className="w-full text-center p-4 text-sm text-gray-500 dark:text-gray-400">Developed By Lucas Leite 🥛</footer>
       
       <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-3">
-        {/* IA Chat Button */}
         <button 
             onClick={() => setIsAIChatOpen(!isAIChatOpen)} 
             className={`p-3 rounded-full shadow-lg transition-all flex items-center justify-center hover:scale-110 active:scale-95 bg-gradient-to-br from-primary-500 to-primary-700 text-white`}
@@ -448,7 +386,6 @@ const App: React.FC = () => {
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
         </button>
 
-        {/* Action Button */}
         <button onClick={() => {
             if (view === 'dashboard') handleAddTransactionClick();
             else if (view === 'planned') handleAddPlannedClick();
