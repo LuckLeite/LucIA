@@ -10,6 +10,8 @@ interface TransactionListProps {
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onViewAll: () => void;
+  isCalculatorOpen?: boolean;
+  onValueClick?: (val: number) => void;
 }
 
 const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
@@ -23,7 +25,9 @@ export const TransactionListItem: React.FC<{
     showCheckbox?: boolean;
     isSelected?: boolean;
     onSelect?: (id: string) => void;
-}> = ({ transaction, category, onEdit, onDelete, onDuplicate, showCheckbox, isSelected, onSelect }) => {
+    isCalculatorOpen?: boolean;
+    onValueClick?: (val: number) => void;
+}> = ({ transaction, category, onEdit, onDelete, onDuplicate, showCheckbox, isSelected, onSelect, isCalculatorOpen, onValueClick }) => {
   const Icon = category ? getIconComponent(category.iconName) : null;
   const isIncome = transaction.type === 'income';
 
@@ -74,7 +78,11 @@ export const TransactionListItem: React.FC<{
         </div>
       </div>
       <div className="flex items-center gap-1 sm:gap-3 ml-1 flex-shrink-0">
-        <span className={`font-bold whitespace-nowrap text-xs sm:text-base ${isIncome ? 'text-income' : 'text-expense'}`}>
+        <span 
+            className={`font-bold whitespace-nowrap text-xs sm:text-base transition-all ${isIncome ? 'text-income' : 'text-expense'} ${isCalculatorOpen ? 'cursor-copy hover:scale-110 active:scale-95 bg-primary-50 dark:bg-primary-900/20 px-2 py-1 rounded' : ''}`}
+            onClick={() => isCalculatorOpen && onValueClick?.(transaction.amount)}
+            title={isCalculatorOpen ? "Copiar para calculadora" : undefined}
+        >
           {isIncome ? '+' : '-'} {transaction.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </span>
         <div className="flex items-center">
@@ -95,7 +103,7 @@ export const TransactionListItem: React.FC<{
   );
 };
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions, categories, onEdit, onDelete, onDuplicate, onViewAll }) => {
+const TransactionList: React.FC<TransactionListProps> = ({ transactions, categories, onEdit, onDelete, onDuplicate, onViewAll, isCalculatorOpen, onValueClick }) => {
   const categoryMap = new Map(categories.map(c => [c.id, c]));
   if (transactions.length === 0) {
     return (
@@ -116,7 +124,16 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, categor
        </div>
        <ul className="space-y-2 sm:space-y-3">
         {transactions.map(tx => (
-          <TransactionListItem key={tx.id} transaction={tx} category={categoryMap.get(tx.categoryId)} onEdit={() => onEdit(tx)} onDelete={() => onDelete(tx.id)} onDuplicate={() => onDuplicate(tx.id)} />
+          <TransactionListItem 
+            key={tx.id} 
+            transaction={tx} 
+            category={categoryMap.get(tx.categoryId)} 
+            onEdit={() => onEdit(tx)} 
+            onDelete={() => onDelete(tx.id)} 
+            onDuplicate={() => onDuplicate(tx.id)} 
+            isCalculatorOpen={isCalculatorOpen}
+            onValueClick={onValueClick}
+          />
         ))}
       </ul>
     </div>

@@ -14,13 +14,15 @@ interface AllTransactionsModalProps {
   onDuplicate: (id: string) => void;
   onDeleteMultiple: (ids: string[]) => void;
   onUpdateCategoryMultiple: (ids: string[], categoryId: string) => void;
+  isCalculatorOpen?: boolean;
+  onValueClick?: (val: number) => void;
 }
 
 type SortKey = 'date' | 'amount' | 'description' | 'categoryId';
 type SortDirection = 'asc' | 'desc';
 
 const AllTransactionsModal: React.FC<AllTransactionsModalProps> = ({ 
-  isOpen, onClose, transactions, categories, onEdit, onDelete, onDuplicate, onDeleteMultiple, onUpdateCategoryMultiple
+  isOpen, onClose, transactions, categories, onEdit, onDelete, onDuplicate, onDeleteMultiple, onUpdateCategoryMultiple, isCalculatorOpen, onValueClick
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
@@ -137,6 +139,8 @@ const AllTransactionsModal: React.FC<AllTransactionsModalProps> = ({
                   showCheckbox={true}
                   isSelected={selectedIds.has(tx.id)}
                   onSelect={handleToggleSelect}
+                  isCalculatorOpen={isCalculatorOpen}
+                  onValueClick={onValueClick}
                 />
               ))}
             </ul>

@@ -14,12 +14,15 @@ interface CardViewProps {
   onAddRegistry: (reg: Omit<CardRegistry, 'id'>) => void;
   onUpdateRegistry: (reg: CardRegistry) => void;
   onDeleteRegistry: (id: string) => void;
+  isCalculatorOpen?: boolean;
+  onValueClick?: (val: number) => void;
 }
 
 const CardView: React.FC<CardViewProps> = ({ 
   transactions, registries, displayDate, 
   onAdd, onUpdate, onDelete, 
-  onAddRegistry, onUpdateRegistry, onDeleteRegistry 
+  onAddRegistry, onUpdateRegistry, onDeleteRegistry,
+  isCalculatorOpen, onValueClick
 }) => {
   const [transactionToEdit, setTransactionToEdit] = useState<CardTransaction | null>(null);
   const [isRegistryModalOpen, setRegistryModalOpen] = useState(false);
@@ -84,7 +87,13 @@ const CardView: React.FC<CardViewProps> = ({
                 Gerenciar Meus Cartões
             </button>
         </div>
-        <CardTransactionList transactions={filteredTransactions} onEdit={handleEdit} onDelete={onDelete} />
+        <CardTransactionList 
+            transactions={filteredTransactions} 
+            onEdit={handleEdit} 
+            onDelete={onDelete} 
+            isCalculatorOpen={isCalculatorOpen}
+            onValueClick={onValueClick}
+        />
       </div>
       
       <div className="lg:col-span-1 space-y-6">

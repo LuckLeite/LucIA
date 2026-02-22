@@ -13,6 +13,8 @@ interface PlannedTransactionListProps {
   onMarkAsPaid: (transaction: PlannedTransaction) => void;
   onUnmarkAsPaid: (transaction: PlannedTransaction) => void;
   drawersOpenDefault?: boolean;
+  isCalculatorOpen?: boolean;
+  onValueClick?: (val: number) => void;
 }
 
 const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
@@ -25,7 +27,9 @@ const PlannedTransactionListItem: React.FC<{
   onDuplicate: () => void;
   onMarkAsPaid: () => void;
   onUnmarkAsPaid: () => void;
-}> = ({ transaction, category, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid }) => {
+  isCalculatorOpen?: boolean;
+  onValueClick?: (val: number) => void;
+}> = ({ transaction, category, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, isCalculatorOpen, onValueClick }) => {
   const Icon = category ? getIconComponent(category.iconName) : null;
   const isIncome = transaction.type === 'income';
   const isPaid = transaction.status === 'paid';
@@ -50,7 +54,11 @@ const PlannedTransactionListItem: React.FC<{
         </div>
       </div>
       <div className="flex items-center gap-1.5 sm:gap-4 flex-shrink-0 ml-1">
-        <span className={`font-bold text-xs sm:text-base whitespace-nowrap ${isIncome ? 'text-income' : 'text-expense'} ${isPaid && 'opacity-70'}`}>
+        <span 
+            className={`font-bold text-xs sm:text-base whitespace-nowrap transition-all ${isIncome ? 'text-income' : 'text-expense'} ${isPaid && 'opacity-70'} ${isCalculatorOpen ? 'cursor-copy hover:scale-110 active:scale-95 bg-primary-50 dark:bg-primary-900/20 px-2 py-1 rounded' : ''}`}
+            onClick={() => isCalculatorOpen && onValueClick?.(transaction.amount)}
+            title={isCalculatorOpen ? "Copiar para calculadora" : undefined}
+        >
           {transaction.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </span>
         
@@ -101,7 +109,9 @@ const PlannedGroupDrawer: React.FC<{
     onMarkAsPaid: (t: PlannedTransaction) => void;
     onUnmarkAsPaid: (t: PlannedTransaction) => void;
     initialOpen?: boolean;
-}> = ({ groupName, items, categories, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, initialOpen = false }) => {
+    isCalculatorOpen?: boolean;
+    onValueClick?: (val: number) => void;
+}> = ({ groupName, items, categories, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, initialOpen = false, isCalculatorOpen, onValueClick }) => {
     // Usamos o initialOpen no estado inicial do useState
     const [isOpen, setIsOpen] = useState(initialOpen);
     const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
@@ -166,6 +176,8 @@ const PlannedGroupDrawer: React.FC<{
                             onDuplicate={() => onDuplicate(pt.id)}
                             onMarkAsPaid={() => onMarkAsPaid(pt)}
                             onUnmarkAsPaid={() => onUnmarkAsPaid(pt)}
+                            isCalculatorOpen={isCalculatorOpen}
+                            onValueClick={onValueClick}
                         />
                     ))}
                 </ul>
@@ -174,7 +186,7 @@ const PlannedGroupDrawer: React.FC<{
     );
 };
 
-const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ plannedTransactions, categories, onAdd, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, drawersOpenDefault = false }) => {
+const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ plannedTransactions, categories, onAdd, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, drawersOpenDefault = false, isCalculatorOpen, onValueClick }) => {
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, PlannedTransaction[]> = {};
     plannedTransactions.forEach(pt => {
@@ -220,6 +232,8 @@ const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ planned
                 onMarkAsPaid={onMarkAsPaid}
                 onUnmarkAsPaid={onUnmarkAsPaid}
                 initialOpen={drawersOpenDefault}
+                isCalculatorOpen={isCalculatorOpen}
+                onValueClick={onValueClick}
             />
         ))}
        </div>

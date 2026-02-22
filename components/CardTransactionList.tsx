@@ -6,6 +6,8 @@ interface CardTransactionListProps {
   transactions: CardTransaction[];
   onEdit: (transaction: CardTransaction) => void;
   onDelete: (id: string) => void;
+  isCalculatorOpen?: boolean;
+  onValueClick?: (val: number) => void;
 }
 
 const CardIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>;
@@ -18,7 +20,9 @@ const CardDrawer: React.FC<{
     items: CardTransaction[]; 
     onEdit: (t: CardTransaction) => void; 
     onDelete: (id: string) => void;
-}> = ({ cardName, items, onEdit, onDelete }) => {
+    isCalculatorOpen?: boolean;
+    onValueClick?: (val: number) => void;
+}> = ({ cardName, items, onEdit, onDelete, isCalculatorOpen, onValueClick }) => {
     const [isOpen, setIsOpen] = useState(true);
     const totalImpact = items.reduce((acc, curr) => acc + curr.totalAmount, 0);
 
@@ -62,7 +66,13 @@ const CardDrawer: React.FC<{
                                 <div className="flex items-center gap-4">
                                     <div className="text-right">
                                          <p className="font-bold text-gray-800 dark:text-gray-100">{t.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                         <p className="text-xs text-expense font-medium">{t.installments}x de {monthlyAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                         <p 
+                                            className={`text-xs font-medium transition-all ${isCalculatorOpen ? 'text-primary-600 dark:text-primary-400 cursor-copy hover:scale-110 active:scale-95 bg-primary-50 dark:bg-primary-900/20 px-1 rounded' : 'text-expense'}`}
+                                            onClick={() => isCalculatorOpen && onValueClick?.(monthlyAmount)}
+                                            title={isCalculatorOpen ? "Copiar parcela para calculadora" : undefined}
+                                         >
+                                            {t.installments}x de {monthlyAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                         </p>
                                     </div>
                                     <div className="flex items-center">
                                         <button onClick={() => onEdit(t)} title="Editar" className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
@@ -82,7 +92,7 @@ const CardDrawer: React.FC<{
     );
 };
 
-const CardTransactionList: React.FC<CardTransactionListProps> = ({ transactions, onEdit, onDelete }) => {
+const CardTransactionList: React.FC<CardTransactionListProps> = ({ transactions, onEdit, onDelete, isCalculatorOpen, onValueClick }) => {
   const groupedCards = useMemo(() => {
     const groups: Record<string, CardTransaction[]> = {};
     transactions.forEach(t => {
@@ -110,7 +120,15 @@ const CardTransactionList: React.FC<CardTransactionListProps> = ({ transactions,
        </div>
        <div className="space-y-4">
         {groupedCards.map(([cardName, items]) => (
-          <CardDrawer key={cardName} cardName={cardName} items={items} onEdit={onEdit} onDelete={onDelete} />
+          <CardDrawer 
+            key={cardName} 
+            cardName={cardName} 
+            items={items} 
+            onEdit={onEdit} 
+            onDelete={onDelete} 
+            isCalculatorOpen={isCalculatorOpen}
+            onValueClick={onValueClick}
+          />
         ))}
       </div>
     </div>

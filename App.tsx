@@ -19,7 +19,7 @@ import CategoryList from './components/CategoryList';
 import CategoryForm from './components/CategoryForm';
 import InvestmentView from './components/InvestmentView';
 import InvestmentForm from './components/InvestmentForm';
-import FloatingCalculator from './components/FloatingCalculator';
+import FloatingCalculator, { FloatingCalculatorRef } from './components/FloatingCalculator';
 import AIChat from './components/AIChat';
 
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
@@ -45,7 +45,9 @@ const App: React.FC = () => {
   const [isCategoryFormOpen, setCategoryFormOpen] = useState(false);
   const [isInvestmentFormOpen, setInvestmentFormOpen] = useState(false);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   
+  const calculatorRef = React.useRef<FloatingCalculatorRef>(null);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [transactionToDeleteId, setTransactionToDeleteId] = useState<string | null>(null);
   const [plannedToEdit, setPlannedToEdit] = useState<PlannedTransaction | null>(null);
@@ -316,6 +318,12 @@ const App: React.FC = () => {
   if (!supabase || !session) return <Auth />;
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-900"><div className="animate-spin h-10 w-10 border-4 border-primary-500 border-t-transparent rounded-full" /></div>;
 
+  const handleValueToCalculator = (val: number) => {
+    if (isCalculatorOpen && calculatorRef.current) {
+        calculatorRef.current.injectValue(val);
+    }
+  };
+
   const handleLogout = async () => { if (supabase) await supabase.auth.signOut(); setSession(null); window.location.reload(); };
 
   const plannedIncomeSum = combinedPlannedTransactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((acc, t) => acc + t.amount, 0);
@@ -364,11 +372,34 @@ const App: React.FC = () => {
                     balanceChartData={balanceChartData}
                     currentBalance={currentMonthRealizedBalance}
                 />
-                <TransactionList transactions={filteredTransactions.slice(0, 5)} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onViewAll={() => setAllTransactionsModalOpen(true)} />
+                <TransactionList 
+                    transactions={filteredTransactions.slice(0, 5)} 
+                    categories={categories} 
+                    onEdit={handleEditTransactionClick} 
+                    onDelete={handleDeleteTransactionClick} 
+                    onDuplicate={duplicateTransaction} 
+                    onViewAll={() => setAllTransactionsModalOpen(true)} 
+                    isCalculatorOpen={isCalculatorOpen}
+                    onValueClick={handleValueToCalculator}
+                />
                 <div className="p-4 sm:p-6"><div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Despesas por Categoria</h3><CategoryPieChart data={pieChartData} /></div></div>
             </>
         )}
-        {view === 'planned' && <PlannedTransactionList plannedTransactions={combinedPlannedTransactions} categories={categories} onAdd={handleAddPlannedClick} onEdit={handleEditPlannedClick} onDelete={handleRequestDeletePlanned} onDuplicate={duplicatePlannedTransaction} onMarkAsPaid={markPlannedTransactionAsPaid} onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} drawersOpenDefault={settings.plannedDrawersOpenDefault} />}
+        {view === 'planned' && (
+            <PlannedTransactionList 
+                plannedTransactions={combinedPlannedTransactions} 
+                categories={categories} 
+                onAdd={handleAddPlannedClick} 
+                onEdit={handleEditPlannedClick} 
+                onDelete={handleRequestDeletePlanned} 
+                onDuplicate={duplicatePlannedTransaction} 
+                onMarkAsPaid={markPlannedTransactionAsPaid} 
+                onUnmarkAsPaid={unmarkPlannedTransactionAsPaid} 
+                drawersOpenDefault={settings.plannedDrawersOpenDefault} 
+                isCalculatorOpen={isCalculatorOpen}
+                onValueClick={handleValueToCalculator}
+            />
+        )}
         {view === 'cards' && (
             <CardView 
                 transactions={cardTransactions} 
@@ -380,6 +411,8 @@ const App: React.FC = () => {
                 onAddRegistry={addCardRegistry}
                 onUpdateRegistry={updateCardRegistry}
                 onDeleteRegistry={deleteCardRegistry}
+                isCalculatorOpen={isCalculatorOpen}
+                onValueClick={handleValueToCalculator}
             />
         )}
         {view === 'investments' && <InvestmentView investments={investments} onEdit={handleEditInvestmentClick} onDelete={handleInvestmentDelete} onBulkUpdate={handleBulkInvestmentUpdate} />}
@@ -406,7 +439,11 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      <FloatingCalculator />
+      <FloatingCalculator 
+        ref={calculatorRef} 
+        isOpen={isCalculatorOpen} 
+        onToggle={() => setIsCalculatorOpen(!isCalculatorOpen)} 
+      />
       <AIChat 
         isOpen={isAIChatOpen} 
         onClose={() => setIsAIChatOpen(false)} 
@@ -417,7 +454,19 @@ const App: React.FC = () => {
         currentMonthName={displayDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
       />
 
-      <AllTransactionsModal isOpen={isAllTransactionsModalOpen} onClose={() => setAllTransactionsModalOpen(false)} transactions={filteredTransactions} categories={categories} onEdit={handleEditTransactionClick} onDelete={handleDeleteTransactionClick} onDuplicate={duplicateTransaction} onDeleteMultiple={deleteMultipleTransactions} onUpdateCategoryMultiple={handleUpdateCategoryMultiple} />
+      <AllTransactionsModal 
+        isOpen={isAllTransactionsModalOpen} 
+        onClose={() => setAllTransactionsModalOpen(false)} 
+        transactions={filteredTransactions} 
+        categories={categories} 
+        onEdit={handleEditTransactionClick} 
+        onDelete={handleDeleteTransactionClick} 
+        onDuplicate={duplicateTransaction} 
+        onDeleteMultiple={deleteMultipleTransactions} 
+        onUpdateCategoryMultiple={handleUpdateCategoryMultiple} 
+        isCalculatorOpen={isCalculatorOpen}
+        onValueClick={handleValueToCalculator}
+      />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
       <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}><TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} /></Modal>

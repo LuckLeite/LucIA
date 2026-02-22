@@ -1,13 +1,36 @@
 
-import React, { useState } from 'react';
+import React, { useState, useImperativeHandle, forwardRef } from 'react';
 
-const FloatingCalculator: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+interface FloatingCalculatorProps {
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+export interface FloatingCalculatorRef {
+  injectValue: (val: number) => void;
+}
+
+const FloatingCalculator = forwardRef<FloatingCalculatorRef, FloatingCalculatorProps>(({ isOpen, onToggle }, ref) => {
   const [display, setDisplay] = useState('0');
   const [equation, setEquation] = useState('');
   const [isNewNumber, setIsNewNumber] = useState(true);
 
-  const toggleOpen = () => setIsOpen(!isOpen);
+  useImperativeHandle(ref, () => ({
+    injectValue: (val: number) => {
+      const numStr = String(val);
+      if (isNewNumber) {
+        setDisplay(numStr);
+        setIsNewNumber(false);
+      } else {
+        // Se não for um novo número, podemos decidir se substituímos ou se apenas ignoramos.
+        // Para UX de "clicar para somar", se o usuário já digitou algo e clica num valor,
+        // talvez ele queira que esse valor seja o novo número se ele acabou de clicar num operador.
+        // O estado isNewNumber já rastreia isso (fica true após clicar num operador).
+        setDisplay(numStr);
+        setIsNewNumber(false);
+      }
+    }
+  }));
 
   const handleNumber = (num: string) => {
     if (isNewNumber) {
@@ -72,7 +95,7 @@ const FloatingCalculator: React.FC = () => {
             </div>
         )}
         <button 
-            onClick={toggleOpen} 
+            onClick={onToggle} 
             className={`p-3 rounded-full shadow-lg transition-colors flex items-center justify-center ${isOpen ? 'bg-red-500 text-white' : 'bg-gray-800 dark:bg-white text-white dark:text-gray-900'}`}
             title="Calculadora"
         >
@@ -84,6 +107,8 @@ const FloatingCalculator: React.FC = () => {
         </button>
     </div>
   );
-};
+});
+
+FloatingCalculator.displayName = 'FloatingCalculator';
 
 export default FloatingCalculator;
