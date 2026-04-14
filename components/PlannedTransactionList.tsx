@@ -1,11 +1,12 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import type { PlannedTransaction, Category } from '../types';
+import type { PlannedTransaction, Category, Bank } from '../types';
 import { getIconComponent } from '../constants';
 
 interface PlannedTransactionListProps {
   plannedTransactions: PlannedTransaction[];
   categories: Category[];
+  banks: Bank[];
   onAdd: () => void;
   onEdit: (transaction: PlannedTransaction) => void;
   onDelete: (id: string) => void;
@@ -22,6 +23,7 @@ const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z
 const PlannedTransactionListItem: React.FC<{
   transaction: PlannedTransaction;
   category?: Category;
+  bank?: Bank;
   onEdit: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -29,7 +31,7 @@ const PlannedTransactionListItem: React.FC<{
   onUnmarkAsPaid: () => void;
   isCalculatorOpen?: boolean;
   onValueClick?: (val: number) => void;
-}> = ({ transaction, category, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, isCalculatorOpen, onValueClick }) => {
+}> = ({ transaction, category, bank, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, isCalculatorOpen, onValueClick }) => {
   const Icon = category ? getIconComponent(category.iconName) : null;
   const isIncome = transaction.type === 'income';
   const isPaid = transaction.status === 'paid';
@@ -50,6 +52,16 @@ const PlannedTransactionListItem: React.FC<{
           <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
             {parseDateAsUTC(transaction.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' })}
              {isGenerated && <span className="ml-1 sm:ml-2 text-[9px] sm:text-[10px] font-bold text-blue-500 dark:text-blue-400 uppercase tracking-tighter sm:tracking-normal">Automático</span>}
+             {bank && (
+                <span 
+                    className="ml-1 sm:ml-2 px-1.5 py-0.5 rounded-full font-bold text-[9px] sm:text-[10px] text-white shadow-sm inline-flex items-center gap-1" 
+                    style={{ 
+                        backgroundColor: bank.color
+                    }}
+                >
+                    <span className="opacity-70">🏦</span> {bank.name}
+                </span>
+            )}
           </p>
         </div>
       </div>
@@ -103,6 +115,7 @@ const PlannedGroupDrawer: React.FC<{
     groupName: string;
     items: PlannedTransaction[];
     categories: Category[];
+    banks: Bank[];
     onEdit: (t: PlannedTransaction) => void;
     onDelete: (id: string) => void;
     onDuplicate: (id: string) => void;
@@ -111,10 +124,11 @@ const PlannedGroupDrawer: React.FC<{
     initialOpen?: boolean;
     isCalculatorOpen?: boolean;
     onValueClick?: (val: number) => void;
-}> = ({ groupName, items, categories, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, initialOpen = false, isCalculatorOpen, onValueClick }) => {
+}> = ({ groupName, items, categories, banks, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, initialOpen = false, isCalculatorOpen, onValueClick }) => {
     // Usamos o initialOpen no estado inicial do useState
     const [isOpen, setIsOpen] = useState(initialOpen);
     const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+    const bankMap = useMemo(() => new Map(banks.map(b => [b.id, b])), [banks]);
 
     // Caso a configuração mude globalmente, atualizamos o estado local
     useEffect(() => {
@@ -171,6 +185,7 @@ const PlannedGroupDrawer: React.FC<{
                             key={pt.id}
                             transaction={pt}
                             category={categoryMap.get(pt.categoryId)}
+                            bank={bankMap.get(pt.bankId || '')}
                             onEdit={() => onEdit(pt)}
                             onDelete={() => onDelete(pt.id)}
                             onDuplicate={() => onDuplicate(pt.id)}
@@ -186,7 +201,7 @@ const PlannedGroupDrawer: React.FC<{
     );
 };
 
-const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ plannedTransactions, categories, onAdd, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, drawersOpenDefault = false, isCalculatorOpen, onValueClick }) => {
+const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ plannedTransactions, categories, banks, onAdd, onEdit, onDelete, onDuplicate, onMarkAsPaid, onUnmarkAsPaid, drawersOpenDefault = false, isCalculatorOpen, onValueClick }) => {
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, PlannedTransaction[]> = {};
     plannedTransactions.forEach(pt => {
@@ -226,6 +241,7 @@ const PlannedTransactionList: React.FC<PlannedTransactionListProps> = ({ planned
                 groupName={groupName} 
                 items={items} 
                 categories={categories}
+                banks={banks}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}

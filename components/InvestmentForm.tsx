@@ -1,21 +1,24 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Investment, InvestmentType, IndexerType } from '../types';
+import type { Investment, InvestmentType, IndexerType, Bank } from '../types';
 
 interface InvestmentFormProps {
   onSubmit: (data: Omit<Investment, 'id'> | Investment) => void;
   investmentToEdit?: Investment | null;
   onCancelEdit: () => void;
   existingGroups?: string[];
+  banks: Bank[];
+  defaultBankId?: string;
 }
 
 const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z');
 
-const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToEdit, onCancelEdit, existingGroups = [] }) => {
+const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToEdit, onCancelEdit, existingGroups = [], banks, defaultBankId }) => {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [currentBalance, setCurrentBalance] = useState('');
   const [type, setType] = useState<InvestmentType>('fixed');
+  const [bankId, setBankId] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [liquidity, setLiquidity] = useState('');
   const [rateType, setRateType] = useState<IndexerType>('CDI');
@@ -31,6 +34,7 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
     setAmount('');
     setCurrentBalance('');
     setType('fixed');
+    setBankId(defaultBankId || banks[0]?.id || '');
     setStartDate(new Date().toISOString().split('T')[0]);
     setLiquidity('');
     setRateType('CDI');
@@ -44,6 +48,7 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
       setAmount(String(investmentToEdit.amount));
       setCurrentBalance(String(investmentToEdit.currentBalance));
       setType(investmentToEdit.type);
+      setBankId(investmentToEdit.bankId || '');
       setStartDate(parseDateAsUTC(investmentToEdit.startDate).toISOString().split('T')[0]);
       setLiquidity(investmentToEdit.liquidity || '');
       setRateType(investmentToEdit.rateType);
@@ -53,7 +58,7 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
     } else {
       resetForm();
     }
-  }, [investmentToEdit]);
+  }, [investmentToEdit, banks, defaultBankId]);
 
   const handleTypeChange = (newType: InvestmentType) => {
       setType(newType);
@@ -158,6 +163,7 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
       amount: parseFloat(amount),
       currentBalance: finalBalance,
       type,
+      bankId: bankId || undefined,
       startDate,
       liquidity: liquidity || 'No Vencimento',
       rateType,
@@ -183,19 +189,29 @@ const InvestmentForm: React.FC<InvestmentFormProps> = ({ onSubmit, investmentToE
                     className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
         </div>
 
-        <div>
-            <label htmlFor="inv-group" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Grupo de Investimento</label>
-            <input 
-                id="inv-group" 
-                list="group-suggestions" 
-                value={group} 
-                onChange={e => setGroup(e.target.value)} 
-                placeholder="Ex: Pessoal, Casal, Reserva de Emergência"
-                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
-            />
-            <datalist id="group-suggestions">
-                {existingGroups.map(g => <option key={g} value={g} />)}
-            </datalist>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label htmlFor="inv-group" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Grupo de Investimento</label>
+                <input 
+                    id="inv-group" 
+                    list="group-suggestions" 
+                    value={group} 
+                    onChange={e => setGroup(e.target.value)} 
+                    placeholder="Ex: Pessoal, Casal, Reserva de Emergência"
+                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" 
+                />
+                <datalist id="group-suggestions">
+                    {existingGroups.map(g => <option key={g} value={g} />)}
+                </datalist>
+            </div>
+            <div>
+                <label htmlFor="inv-bank" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Banco / Conta</label>
+                <select id="inv-bank" value={bankId} onChange={e => setBankId(e.target.value)} required
+                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500">
+                <option value="">Selecione o banco</option>
+                {banks.map(bank => <option key={bank.id} value={bank.id}>{bank.name}</option>)}
+                </select>
+            </div>
         </div>
         
         <div className="grid grid-cols-2 gap-4">

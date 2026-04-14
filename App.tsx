@@ -7,7 +7,9 @@ import Modal from './components/ui/Modal';
 import { useFinanceData } from './hooks/useFinanceData';
 import { supabase } from './lib/supabaseClient';
 import Auth from './components/Auth';
-import type { Theme, Transaction, View, PlannedTransaction, Category, CardTransaction, Investment } from './types';
+import type { Theme, Transaction, View, PlannedTransaction, Category, CardTransaction, Investment, Bank } from './types';
+import BankForm from './components/BankForm';
+import BankManagementModal from './components/BankManagementModal';
 import AllTransactionsModal from './components/AllTransactionsModal';
 import PlannedTransactionList from './components/PlannedTransactionList';
 import PlannedTransactionForm from './components/PlannedTransactionForm';
@@ -47,6 +49,12 @@ const App: React.FC = () => {
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   
+  const [selectedBankId, setSelectedBankId] = useState<string | 'all'>('all');
+  const [isBankModalOpen, setBankModalOpen] = useState(false);
+  const [isBankManagementOpen, setBankManagementOpen] = useState(false);
+  const [bankToEdit, setBankToEdit] = useState<Bank | null>(null);
+  const [isMigrationModalOpen, setMigrationModalOpen] = useState(false);
+
   const calculatorRef = React.useRef<FloatingCalculatorRef>(null);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [transactionToDeleteId, setTransactionToDeleteId] = useState<string | null>(null);
@@ -75,9 +83,17 @@ const App: React.FC = () => {
     cardTransactions, cardRegistries, addCardTransaction, updateCardTransaction, deleteCardTransaction, addCardRegistry, updateCardRegistry, deleteCardRegistry,
     investments, addInvestment, updateInvestment, deleteInvestment,
     addCategory, updateCategory, deleteCategory, updateCategoryOrder,
+    banks, addBank, updateBank, deleteBank, migrateToFirstBank,
     loading, error, totalBalance,
     exportData, importData, clearAllData, settings, updateSettings
   } = useFinanceData();
+
+  // Lógica de Migração para usuários antigos
+  useEffect(() => {
+    if (!loading && session && banks.length === 0 && (transactions.length > 0 || plannedTransactions.length > 0)) {
+        setMigrationModalOpen(true);
+    }
+  }, [loading, session, banks.length, transactions.length, plannedTransactions.length]);
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -186,6 +202,33 @@ const App: React.FC = () => {
     setCategoryFormOpen(false);
   };
 
+  const handleBankSubmit = async (data: Omit<Bank, 'id'> | Bank) => {
+    if ('id' in data) {
+        await updateBank(data as Bank);
+    } else {
+        const newBank = await addBank(data);
+        if (newBank && banks.length === 0) setSelectedBankId(newBank.id);
+    }
+    setBankModalOpen(false);
+    setBankToEdit(null);
+  };
+
+  const handleSetPrimaryBank = async (id: string) => {
+      // Lógica para garantir que apenas um seja primário
+      for (const bank of banks) {
+          await updateBank({ ...bank, is_primary: bank.id === id });
+      }
+  };
+
+  const handleMigrationSubmit = async (data: Omit<Bank, 'id'>) => {
+    const newBank = await addBank(data);
+    if (newBank) {
+        await migrateToFirstBank(newBank.id);
+        setSelectedBankId(newBank.id);
+        setMigrationModalOpen(false);
+    }
+  };
+
   const handleAddInvestmentClick = () => { setInvestmentToEdit(null); setInvestmentFormOpen(true); };
   const handleEditInvestmentClick = (inv: Investment) => { setInvestmentToEdit(inv); setInvestmentFormOpen(true); };
   const handleInvestmentSubmit = (data: Omit<Investment, 'id'> | Investment) => {
@@ -208,11 +251,41 @@ const App: React.FC = () => {
     return `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}`;
   }, [displayDate]);
 
-  const filteredTransactions = useMemo(() => transactions.filter(tx => tx.date.startsWith(monthPrefix)), [transactions, monthPrefix]);
-  const filteredPlannedTransactions = useMemo(() => plannedTransactions.filter(pt => pt.dueDate.startsWith(monthPrefix) && !pt.isGenerated && !pt.group_name?.startsWith('AUTO_')), [plannedTransactions, monthPrefix]);
-  const filteredCardInvoices = useMemo(() => generatedCardInvoices.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedCardInvoices, monthPrefix]);
-  const filteredTithing = useMemo(() => generatedTithing.filter(pt => pt.dueDate.startsWith(monthPrefix)), [generatedTithing, monthPrefix]);
-  const filteredMovement = useMemo(() => getGeneratedMovementForMonth(monthPrefix), [getGeneratedMovementForMonth, monthPrefix]);
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => 
+        tx.date.startsWith(monthPrefix) && 
+        (selectedBankId === 'all' || tx.bankId === selectedBankId)
+    );
+  }, [transactions, monthPrefix, selectedBankId]);
+
+  const filteredPlannedTransactions = useMemo(() => {
+    return plannedTransactions.filter(pt => 
+        pt.dueDate.startsWith(monthPrefix) && 
+        !pt.isGenerated && 
+        !pt.group_name?.startsWith('AUTO_') &&
+        (selectedBankId === 'all' || pt.bankId === selectedBankId)
+    );
+  }, [plannedTransactions, monthPrefix, selectedBankId]);
+
+  const filteredCardInvoices = useMemo(() => {
+    return generatedCardInvoices.filter(pt => 
+        pt.dueDate.startsWith(monthPrefix) &&
+        (selectedBankId === 'all' || pt.bankId === selectedBankId)
+    );
+  }, [generatedCardInvoices, monthPrefix, selectedBankId]);
+
+  const filteredTithing = useMemo(() => {
+    return generatedTithing.filter(pt => 
+        pt.dueDate.startsWith(monthPrefix) &&
+        (selectedBankId === 'all' || pt.bankId === selectedBankId)
+    );
+  }, [generatedTithing, monthPrefix, selectedBankId]);
+
+  const filteredMovement = useMemo(() => {
+    return getGeneratedMovementForMonth(monthPrefix).filter(pt =>
+        (selectedBankId === 'all' || pt.bankId === selectedBankId)
+    );
+  }, [getGeneratedMovementForMonth, monthPrefix, selectedBankId]);
 
   const combinedPlannedTransactions = useMemo(() => {
       const todayISO = new Date().toISOString().split('T')[0];
@@ -220,7 +293,7 @@ const App: React.FC = () => {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowISO = tomorrow.toISOString().split('T')[0];
 
-      const baseList = [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing, ...filteredMovement];
+      const baseList = [...filteredPlannedTransactions, ...filteredCardInvoices, ...filteredTithing];
       
       return baseList.map(pt => {
           let finalPt = { ...pt } as PlannedTransaction;
@@ -236,14 +309,18 @@ const App: React.FC = () => {
           }
           return finalPt;
       }).sort((a,b) => a.dueDate.localeCompare(b.dueDate));
-  }, [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredMovement, filteredTransactions]);
+  }, [filteredPlannedTransactions, filteredCardInvoices, filteredTithing, filteredTransactions]);
 
   const currentMonthRealizedBalance = useMemo(() => {
     const todayISO = new Date().toISOString().split('T')[0];
+    const initialBalance = selectedBankId === 'all' 
+        ? banks.reduce((sum, b) => sum + b.initial_balance, 0)
+        : banks.find(b => b.id === selectedBankId)?.initial_balance || 0;
+
     return transactions
-        .filter(tx => tx.date <= todayISO)
-        .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), 0);
-  }, [transactions]);
+        .filter(tx => tx.date <= todayISO && (selectedBankId === 'all' || tx.bankId === selectedBankId))
+        .reduce((sum, tx) => (tx.type === 'income' ? sum + tx.amount : sum - tx.amount), initialBalance);
+  }, [transactions, selectedBankId, banks]);
 
   const balanceChartData = useMemo(() => {
     const today = new Date();
@@ -254,24 +331,27 @@ const App: React.FC = () => {
     // LÓGICA PROGRESSIVA (SENSÍVEL À DATA)
     // Resolve o bug: Receber em fevereiro não altera o saldo de Janeiro.
     const calculateBalanceAt = (dateISO: string) => {
+        const initialBalanceSum = banks
+            .filter(b => selectedBankId === 'all' || b.id === selectedBankId)
+            .reduce((sum, b) => sum + (b.initial_balance || 0), 0);
+
         // Se a data do gráfico é passado ou hoje:
         if (dateISO <= todayISO) {
             // Saldo histórico: apenas o que aconteceu DE FATO até aquele dia específico.
-            // Ignora qualquer transação futura.
             return transactions
-                .filter(tx => tx.date <= dateISO)
-                .reduce((sum, tx) => tx.type === 'income' ? sum + tx.amount : sum - tx.amount, 0);
+                .filter(tx => tx.date <= dateISO && (selectedBankId === 'all' || tx.bankId === selectedBankId))
+                .reduce((sum, tx) => tx.type === 'income' ? sum + tx.amount : sum - tx.amount, initialBalanceSum);
         } 
         // Se a data do gráfico é futura:
         else {
             // Projeção: Saldo Real Hoje + Pendências planejadas entre hoje e a data alvo.
             const realizedBalanceToday = transactions
-                .filter(tx => tx.date <= todayISO)
-                .reduce((sum, tx) => tx.type === 'income' ? sum + tx.amount : sum - tx.amount, 0);
+                .filter(tx => tx.date <= todayISO && (selectedBankId === 'all' || tx.bankId === selectedBankId))
+                .reduce((sum, tx) => tx.type === 'income' ? sum + tx.amount : sum - tx.amount, initialBalanceSum);
             
             // Soma as pendências futuras (Planned) até o dia do gráfico
             const futurePendingSum = combinedPlannedTransactions
-                .filter(pt => pt.status === 'pending' && pt.dueDate > todayISO && pt.dueDate <= dateISO)
+                .filter(pt => pt.status === 'pending' && pt.dueDate > todayISO && pt.dueDate <= dateISO && (selectedBankId === 'all' || pt.bankId === selectedBankId))
                 .reduce((acc, pt) => pt.type === 'income' ? acc + pt.amount : acc - pt.amount, 0);
 
             return realizedBalanceToday + futurePendingSum;
@@ -291,7 +371,7 @@ const App: React.FC = () => {
     }
 
     return fullChartData;
-  }, [transactions, combinedPlannedTransactions, displayDate]);
+  }, [transactions, combinedPlannedTransactions, displayDate, selectedBankId, banks]);
 
   const pieChartData = useMemo(() => {
     const expenseByCategory = new Map<string, { name: string; value: number; color: string }>();
@@ -344,6 +424,28 @@ const App: React.FC = () => {
             </nav>
           </div>
           <div className="flex items-center gap-4">
+             <div className="flex items-center gap-2">
+                <select 
+                    value={selectedBankId} 
+                    onChange={(e) => {
+                        if (e.target.value === 'manage') {
+                            setBankManagementOpen(true);
+                        } else {
+                            setSelectedBankId(e.target.value);
+                        }
+                    }}
+                    className="bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm font-bold outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                    <option value="all">🏦 Todos os Bancos</option>
+                    {banks.map(bank => (
+                        <option key={bank.id} value={bank.id}>
+                            {bank.is_primary ? '⭐ ' : ''}{bank.name}
+                        </option>
+                    ))}
+                    <option value="manage">⚙️ Gerenciar Bancos</option>
+                </select>
+             </div>
+
              {view !== 'categories' && view !== 'investments' && (
                 <div className="flex items-center gap-2 text-lg font-semibold">
                     <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"><ChevronLeftIcon /></button>
@@ -365,8 +467,8 @@ const App: React.FC = () => {
             <>
                 <Dashboard 
                     categories={categories}
-                    monthlyIncome={getMonthlySummary(displayDate).income}
-                    monthlyExpense={getMonthlySummary(displayDate).expense}
+                    monthlyIncome={getMonthlySummary(displayDate, selectedBankId).income}
+                    monthlyExpense={getMonthlySummary(displayDate, selectedBankId).expense}
                     monthlyPlannedExpense={plannedExpenseSum}
                     monthlyPlannedIncome={plannedIncomeSum}
                     balanceChartData={balanceChartData}
@@ -375,6 +477,7 @@ const App: React.FC = () => {
                 <TransactionList 
                     transactions={filteredTransactions.slice(0, 5)} 
                     categories={categories} 
+                    banks={banks}
                     onEdit={handleEditTransactionClick} 
                     onDelete={handleDeleteTransactionClick} 
                     onDuplicate={duplicateTransaction} 
@@ -389,6 +492,7 @@ const App: React.FC = () => {
             <PlannedTransactionList 
                 plannedTransactions={combinedPlannedTransactions} 
                 categories={categories} 
+                banks={banks}
                 onAdd={handleAddPlannedClick} 
                 onEdit={handleEditPlannedClick} 
                 onDelete={handleRequestDeletePlanned} 
@@ -459,6 +563,7 @@ const App: React.FC = () => {
         onClose={() => setAllTransactionsModalOpen(false)} 
         transactions={filteredTransactions} 
         categories={categories} 
+        banks={banks}
         onEdit={handleEditTransactionClick} 
         onDelete={handleDeleteTransactionClick} 
         onDuplicate={duplicateTransaction} 
@@ -469,10 +574,33 @@ const App: React.FC = () => {
       />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} onSubmit={handleImportSubmit} categories={categories} />
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setSettingsModalOpen(false)} exportData={exportData} importData={importData} clearAllData={clearAllData} settings={settings} updateSettings={updateSettings} />
-      <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}><TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} /></Modal>
-      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}><PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} existingGroups={uniquePlannedGroups} /></Modal>
-      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}><CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} /></Modal>
-      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}><InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} /></Modal>
+      <Modal isOpen={isFormModalOpen} onClose={() => setFormModalOpen(false)} title={transactionToEdit ? 'Editar Transação' : 'Nova Transação'}><TransactionForm onSubmit={handleFormSubmit} transactionToEdit={transactionToEdit} categories={categories} banks={banks} defaultBankId={selectedBankId !== 'all' ? selectedBankId : undefined} /></Modal>
+      <Modal isOpen={isPlannedFormModalOpen} onClose={() => setPlannedFormModalOpen(false)} title={plannedToEdit ? 'Editar Planejamento' : 'Novo Planejamento'}><PlannedTransactionForm onSubmit={handlePlannedFormSubmit} transactionToEdit={plannedToEdit} categories={categories} existingGroups={uniquePlannedGroups} banks={banks} defaultBankId={selectedBankId !== 'all' ? selectedBankId : undefined} /></Modal>
+      <Modal isOpen={isCategoryFormOpen} onClose={() => setCategoryFormOpen(false)} title={categoryToEdit ? 'Editar Categoria' : 'Nova Categoria'}><CategoryForm onSubmit={handleCategorySubmit} categoryToEdit={categoryToEdit} banks={banks} /></Modal>
+      <Modal isOpen={isInvestmentFormOpen} onClose={() => setInvestmentFormOpen(false)} title={investmentToEdit ? 'Editar Investimento' : 'Novo Investimento'}><InvestmentForm onSubmit={handleInvestmentSubmit} investmentToEdit={investmentToEdit} onCancelEdit={() => setInvestmentFormOpen(false)} banks={banks} defaultBankId={selectedBankId !== 'all' ? selectedBankId : undefined} /></Modal>
+      <Modal isOpen={isBankModalOpen} onClose={() => { setBankModalOpen(false); setBankToEdit(null); }} title={bankToEdit ? 'Editar Banco' : 'Novo Banco / Conta'}><BankForm onSubmit={handleBankSubmit} onCancel={() => { setBankModalOpen(false); setBankToEdit(null); }} bankToEdit={bankToEdit || undefined} /></Modal>
+      
+      <BankManagementModal 
+        isOpen={isBankManagementOpen}
+        onClose={() => setBankManagementOpen(false)}
+        banks={banks}
+        onEdit={(bank) => { setBankToEdit(bank); setBankModalOpen(true); }}
+        onDelete={deleteBank}
+        onSetPrimary={handleSetPrimaryBank}
+        onAdd={() => { setBankToEdit(null); setBankModalOpen(true); }}
+      />
+      
+      <Modal isOpen={isMigrationModalOpen} onClose={() => {}} title="Configuração Inicial">
+          <div className="space-y-4">
+              <div className="p-4 bg-primary-50 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-800 rounded-lg">
+                  <p className="text-sm text-primary-800 dark:text-primary-200 font-medium">
+                      Identificamos que você já possui lançamentos! Para continuar, cadastre seu banco principal. 
+                      Todos os seus dados atuais serão vinculados a esta conta automaticamente.
+                  </p>
+              </div>
+              <BankForm onSubmit={handleMigrationSubmit} />
+          </div>
+      </Modal>
       
       <Modal isOpen={isConfirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirmar Exclusão">
           <div className="text-center p-4">

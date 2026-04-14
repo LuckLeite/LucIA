@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import type { Transaction, PlannedTransaction, CardTransaction, CardRegistry, Category, AppSettings, Investment, Budget } from '../types';
+import type { Transaction, PlannedTransaction, CardTransaction, CardRegistry, Category, AppSettings, Investment, Budget, Bank } from '../types';
 import { INITIAL_CATEGORIES_TEMPLATE } from '../constants';
 
 const generateUUID = () => crypto.randomUUID();
@@ -18,6 +18,7 @@ export const useFinanceData = () => {
     const [cardRegistries, setCardRegistries] = useState<CardRegistry[]>([]);
     const [investments, setInvestments] = useState<Investment[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [banks, setBanks] = useState<Bank[]>([]);
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
     const [loading, setLoading] = useState(true);
@@ -41,8 +42,12 @@ export const useFinanceData = () => {
                 const { error } = await supabase.from(table).delete().eq('id', item.id);
                 if (error) throw error;
             } else {
-                const { isGenerated, isPersistentOverride, ...cleanItem } = item;
-                let dataToSync = { ...cleanItem, user_id: session.user.id };
+                const { isGenerated, isPersistentOverride, bankId, ...cleanItem } = item;
+                let dataToSync = { 
+                    ...cleanItem, 
+                    user_id: session.user.id,
+                    bank_id: bankId || item.bank_id // Mapeia camelCase para snake_case se necessário
+                };
                 
                 const { error } = await supabase.from(table).upsert(dataToSync);
                 if (error) throw error;
@@ -59,7 +64,7 @@ export const useFinanceData = () => {
         }
         setLoading(true);
         try {
-            const [txs, pln, crd, creg, inv, cat, bud, set] = await Promise.all([
+            const [txs, pln, crd, creg, inv, cat, bud, set, bnk] = await Promise.all([
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
                 supabase.from('planned_transactions').select('*'),
                 supabase.from('card_transactions').select('*'),
@@ -67,8 +72,11 @@ export const useFinanceData = () => {
                 supabase.from('investments').select('*'),
                 supabase.from('categories').select('*').order('sort_order', { ascending: true }),
                 supabase.from('budgets').select('*'),
-                supabase.from('settings').select('*').eq('user_id', session.user.id).maybeSingle()
+                supabase.from('settings').select('*').eq('user_id', session.user.id).maybeSingle(),
+                supabase.from('banks').select('*')
             ]);
+
+            if (bnk.data) setBanks(bnk.data);
 
             if (cat.data) {
                 if (cat.data.length === 0) {
@@ -84,16 +92,19 @@ export const useFinanceData = () => {
                     setCategories(cat.data.map((c: any) => ({
                         ...c,
                         includeInTithing: c.includeInTithing ?? c.includeintithing ?? (c.type === 'income'),
-                        sort_order: c.sort_order ?? c.sortorder
+                        sort_order: c.sort_order ?? c.sortorder,
+                        bankId: c.bank_id ?? c.bankid,
+                        is_movement: c.is_movement ?? c.is_movement,
+                        movement_bank_id: c.movement_bank_id ?? c.movement_bank_id
                     })));
                 }
             }
 
-            if (txs.data) setTransactions(txs.data);
-            if (pln.data) setPlannedTransactions(pln.data);
-            if (crd.data) setCardTransactions(crd.data);
+            if (txs.data) setTransactions(txs.data.map((t: any) => ({ ...t, bankId: t.bank_id })));
+            if (pln.data) setPlannedTransactions(pln.data.map((p: any) => ({ ...p, bankId: p.bank_id })));
+            if (crd.data) setCardTransactions(crd.data.map((c: any) => ({ ...c, bankId: c.bank_id })));
             if (creg.data) setCardRegistries(creg.data || []);
-            if (inv.data) setInvestments(inv.data);
+            if (inv.data) setInvestments(inv.data.map((i: any) => ({ ...i, bankId: i.bank_id })));
             if (bud.data) setBudgets(bud.data);
             
             if (set.data) {
@@ -125,31 +136,45 @@ export const useFinanceData = () => {
     const movementCategoryExpense = useMemo(() => findCategoryByName('Movimento', 'expense'), [categories]);
     const movementCategoryIncome = useMemo(() => findCategoryByName('Movimento', 'income'), [categories]);
 
+    const virtualTransactions = useMemo<Transaction[]>(() => {
+        const virtuals: Transaction[] = [];
+        const movementCategories = categories.filter(c => c.is_movement && c.movement_bank_id);
+        
+        transactions.forEach(tx => {
+            const cat = movementCategories.find(c => c.id === tx.categoryId);
+            if (cat && tx.type === 'expense') {
+                virtuals.push({
+                    id: `virtual_mov_${tx.id}`,
+                    amount: tx.amount,
+                    type: 'income',
+                    categoryId: tx.categoryId,
+                    bankId: cat.movement_bank_id,
+                    date: tx.date,
+                    description: `Movimento: ${tx.description || cat.name}`,
+                    isVirtual: true
+                });
+            }
+        });
+        
+        return virtuals;
+    }, [transactions, categories]);
+
+    const allTransactions = useMemo(() => {
+        return [...transactions, ...virtualTransactions];
+    }, [transactions, virtualTransactions]);
+
     const getPersistentOverride = (key: string) => {
         return plannedTransactions.find(pt => pt.group_name === key);
     };
 
     const getGeneratedMovementForMonth = useCallback((monthPrefix: string): PlannedTransaction[] => {
-        if (!movementCategoryExpense || !movementCategoryIncome) return [];
-        const identityKey = `AUTO_MOV_${monthPrefix}`;
-        const override = getPersistentOverride(identityKey);
-        const monthTransactions = transactions.filter(t => t.date.startsWith(monthPrefix));
-        const movementOut = monthTransactions.filter(t => t.categoryId === movementCategoryExpense.id).reduce((sum, t) => sum + t.amount, 0);
-        const movementIn = monthTransactions.filter(t => t.categoryId === movementCategoryIncome.id).reduce((sum, t) => sum + t.amount, 0);
-        const calculatedAmount = movementOut - movementIn;
-        if (calculatedAmount <= 0 && !override) return [];
-        return [{
-            id: override?.id || `gen_mov_${monthPrefix}`,
-            description: override?.description || 'Recurso Disponível (Banco Vivo)',
-            amount: calculatedAmount,
-            type: 'income' as const,
-            categoryId: override?.categoryId || movementCategoryIncome.id,
-            dueDate: override?.dueDate || `${monthPrefix}-01`,
-            status: override?.status || 'pending',
-            isGenerated: true,
-            group_name: identityKey
-        }];
-    }, [transactions, movementCategoryExpense, movementCategoryIncome, plannedTransactions]);
+        return []; // Desativado: Movimentos agora vão direto para transações
+    }, []);
+
+    const primaryBankId = useMemo(() => {
+        const primary = banks.find(b => b.is_primary);
+        return primary?.id || banks[0]?.id;
+    }, [banks]);
 
     const generatedCardInvoices = useMemo(() => {
         if (!cardCategory) return [];
@@ -177,6 +202,7 @@ export const useFinanceData = () => {
                         amount: installmentAmount,
                         type: 'expense',
                         categoryId: override?.categoryId || cardCategory.id,
+                        bankId: override?.bankId || primaryBankId, // Usa banco primário
                         dueDate: override?.dueDate || dateStr,
                         status: override?.status || 'pending',
                         isGenerated: true,
@@ -186,7 +212,7 @@ export const useFinanceData = () => {
             }
         });
         return Array.from(invoiceMap.values());
-    }, [cardTransactions, cardCategory, cardRegistries, plannedTransactions]);
+    }, [cardTransactions, cardCategory, cardRegistries, plannedTransactions, primaryBankId]);
 
     const generatedTithing = useMemo<PlannedTransaction[]>(() => {
         if (!settings.calculateTithing || !tithingCategory) return [];
@@ -209,13 +235,14 @@ export const useFinanceData = () => {
                 amount: total * 0.1,
                 type: 'expense' as const,
                 categoryId: override?.categoryId || tithingCategory.id,
+                bankId: override?.bankId || primaryBankId, // Usa banco primário
                 dueDate: override?.dueDate || `${month}-10`,
                 status: override?.status || 'pending',
                 isGenerated: true,
                 group_name: identityKey
             };
         });
-    }, [transactions, settings.calculateTithing, tithingCategory, categories, plannedTransactions]);
+    }, [transactions, settings.calculateTithing, tithingCategory, categories, plannedTransactions, primaryBankId]);
 
     const addTransaction = async (tx: Omit<Transaction, 'id'>) => {
         const newTx = { ...tx, id: generateUUID() };
@@ -257,12 +284,13 @@ export const useFinanceData = () => {
         if (original) addTransaction({ ...original });
     };
 
-    const getMonthlySummary = (date: Date) => {
+    const getMonthlySummary = (date: Date, bankId: string = 'all') => {
         const prefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const filtered = transactions.filter(t => {
+        const filtered = allTransactions.filter(t => {
             const cat = categories.find(c => c.id === t.categoryId);
             const isMovement = cat?.name.toLowerCase() === 'movimento';
-            return t.date.startsWith(prefix) && !isMovement;
+            const matchesBank = bankId === 'all' || t.bankId === bankId;
+            return t.date.startsWith(prefix) && !isMovement && matchesBank;
         });
         const income = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
         const expense = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -482,14 +510,47 @@ export const useFinanceData = () => {
         await syncItem('investments', { id }, 'delete');
     };
 
+    const addBank = async (bank: Omit<Bank, 'id'>) => {
+        const newBank = { ...bank, id: generateUUID() };
+        setBanks(prev => [...prev, newBank]);
+        await syncItem('banks', newBank);
+        return newBank;
+    };
+
+    const updateBank = async (bank: Bank) => {
+        setBanks(prev => prev.map(b => b.id === bank.id ? bank : b));
+        await syncItem('banks', bank);
+    };
+
+    const deleteBank = async (id: string) => {
+        setBanks(prev => prev.filter(b => b.id !== id));
+        await syncItem('banks', { id }, 'delete');
+    };
+
+    const migrateToFirstBank = async (bankId: string) => {
+        if (!supabase || !session) return;
+        setLoading(true);
+        try {
+            const tables = ['transactions', 'planned_transactions', 'card_transactions', 'investments'];
+            for (const table of tables) {
+                await supabase.from(table).update({ bank_id: bankId }).eq('user_id', session.user.id);
+            }
+            await loadData();
+        } catch (e: any) {
+            setError(`Erro na migração: ${e.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const clearAllData = async () => {
         if (!supabase || !session) return;
         setLoading(true);
-        const tables = ['transactions', 'planned_transactions', 'card_transactions', 'card_registries', 'investments', 'categories', 'settings'];
+        const tables = ['transactions', 'planned_transactions', 'card_transactions', 'card_registries', 'investments', 'categories', 'settings', 'banks'];
         for (const table of tables) {
             await supabase.from(table).delete().eq('user_id', session.user.id);
         }
-        setTransactions([]); setPlannedTransactions([]); setCardTransactions([]); setCardRegistries([]); setInvestments([]); setCategories([]); setSettings(DEFAULT_SETTINGS);
+        setTransactions([]); setPlannedTransactions([]); setCardTransactions([]); setCardRegistries([]); setInvestments([]); setCategories([]); setBanks([]); setSettings(DEFAULT_SETTINGS);
         loadData();
     };
 
@@ -527,16 +588,17 @@ export const useFinanceData = () => {
     };
 
     const totalBalance = useMemo(() => {
-        return transactions.reduce((sum, t) => t.type === 'income' ? sum + t.amount : sum - t.amount, 0);
-    }, [transactions]);
+        return allTransactions.reduce((sum, t) => t.type === 'income' ? sum + t.amount : sum - t.amount, 0);
+    }, [allTransactions]);
 
     return {
-        transactions, categories, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
+        transactions: allTransactions, categories, banks, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
         getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory, getGeneratedMovementForMonth,
         plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, duplicatePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
         cardTransactions, cardRegistries, addCardTransaction, updateCardTransaction, deleteCardTransaction, addCardRegistry, updateCardRegistry, deleteCardRegistry,
         investments, addInvestment, updateInvestment, deleteInvestment,
         addCategory, updateCategory, deleteCategory, updateCategoryOrder,
+        addBank, updateBank, deleteBank, migrateToFirstBank,
         loading, error, totalBalance,
         exportData, importData, clearAllData, settings, updateSettings
     };

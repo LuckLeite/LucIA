@@ -3,13 +3,23 @@ import type { FC, SVGProps } from 'react';
 
 export type TransactionType = 'income' | 'expense';
 
+export interface Bank {
+  id: string;
+  name: string;
+  color: string;
+  initial_balance: number;
+  is_primary?: boolean;
+}
+
 export interface Transaction {
   id: string;
   amount: number;
   type: TransactionType;
   categoryId: string;
+  bankId?: string;
   date: string; // ISO string format
   description: string;
+  isVirtual?: boolean;
 }
 
 export interface PlannedTransaction {
@@ -17,6 +27,7 @@ export interface PlannedTransaction {
   amount: number;
   type: TransactionType;
   categoryId: string;
+  bankId?: string;
   description: string;
   dueDate: string; // ISO string format for the due date
   status: 'pending' | 'paid';
@@ -31,6 +42,7 @@ export interface CardTransaction {
   id: string;
   name: string;
   card: string;
+  bankId?: string;
   totalAmount: number;
   installments: number;
   purchaseDate: string; // ISO string format
@@ -49,6 +61,7 @@ export interface Investment {
     id: string;
     name: string;
     type: InvestmentType;
+    bankId?: string;
     amount: number; // Valor Aportado
     currentBalance: number; // Saldo Atual
     startDate: string;
@@ -67,6 +80,8 @@ export interface Category {
   type: TransactionType;
   includeInTithing?: boolean;
   sort_order?: number; // Campo para ordenação manual
+  is_movement?: boolean;
+  movement_bank_id?: string;
 }
 
 export interface Budget {

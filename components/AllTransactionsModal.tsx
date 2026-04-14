@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import type { Transaction, Category } from '../types';
+import type { Transaction, Category, Bank } from '../types';
 import Modal from './ui/Modal';
 import { TransactionListItem } from './TransactionList';
 
@@ -9,6 +9,7 @@ interface AllTransactionsModalProps {
   onClose: () => void;
   transactions: Transaction[];
   categories: Category[];
+  banks: Bank[];
   onEdit: (transaction: Transaction) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -22,13 +23,14 @@ type SortKey = 'date' | 'amount' | 'description' | 'categoryId';
 type SortDirection = 'asc' | 'desc';
 
 const AllTransactionsModal: React.FC<AllTransactionsModalProps> = ({ 
-  isOpen, onClose, transactions, categories, onEdit, onDelete, onDuplicate, onDeleteMultiple, onUpdateCategoryMultiple, isCalculatorOpen, onValueClick
+  isOpen, onClose, transactions, categories, banks, onEdit, onDelete, onDuplicate, onDeleteMultiple, onUpdateCategoryMultiple, isCalculatorOpen, onValueClick
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+  const bankMap = useMemo(() => new Map(banks.map(b => [b.id, b])), [banks]);
 
   const filteredAndSorted = useMemo(() => {
     return transactions
@@ -133,6 +135,7 @@ const AllTransactionsModal: React.FC<AllTransactionsModalProps> = ({
                   key={tx.id} 
                   transaction={tx} 
                   category={categoryMap.get(tx.categoryId)} 
+                  bank={bankMap.get(tx.bankId || '')}
                   onEdit={() => onEdit(tx)} 
                   onDelete={() => onDelete(tx.id)} 
                   onDuplicate={() => onDuplicate(tx.id)}

@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import type { Category, TransactionType } from '../types';
+import type { Category, TransactionType, Bank } from '../types';
 import { ICON_MAP, getIconComponent } from '../constants';
 
 interface CategoryFormProps {
   onSubmit: (category: Omit<Category, 'id'> | Category) => void;
   categoryToEdit?: Category | null;
+  banks: Bank[];
 }
 
-const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit }) => {
+const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit, banks }) => {
   const [name, setName] = useState('');
   const [iconName, setIconName] = useState('Tag');
   const [color, setColor] = useState('#3b82f6');
   const [type, setType] = useState<TransactionType>('expense');
   const [includeInTithing, setIncludeInTithing] = useState(true);
+  const [isMovement, setIsMovement] = useState(false);
+  const [movementBankId, setMovementBankId] = useState('');
 
   useEffect(() => {
     if (categoryToEdit) {
@@ -21,12 +24,16 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
       setColor(categoryToEdit.color);
       setType(categoryToEdit.type);
       setIncludeInTithing(categoryToEdit.includeInTithing !== undefined ? categoryToEdit.includeInTithing : true);
+      setIsMovement(categoryToEdit.is_movement || false);
+      setMovementBankId(categoryToEdit.movement_bank_id || '');
     } else {
       setName('');
       setIconName('Tag');
       setColor('#3b82f6');
       setType('expense');
       setIncludeInTithing(true);
+      setIsMovement(false);
+      setMovementBankId('');
     }
   }, [categoryToEdit]);
 
@@ -42,8 +49,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
         iconName, 
         color, 
         type,
-        // Only save includeInTithing for income, undefined for expense (or false, but undefined is cleaner if not used)
-        includeInTithing: type === 'income' ? includeInTithing : undefined 
+        includeInTithing: type === 'income' ? includeInTithing : undefined,
+        is_movement: isMovement,
+        movement_bank_id: isMovement ? movementBankId : undefined
     };
 
     if (categoryToEdit) {
@@ -89,20 +97,53 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onSubmit, categoryToEdit })
             </div>
         </div>
 
-        {type === 'income' && (
-             <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-slate-800 rounded-md border border-blue-100 dark:border-slate-700">
+         {type === 'income' && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-slate-800 rounded-md border border-blue-100 dark:border-slate-700">
+                 <input 
+                     type="checkbox" 
+                     id="includeInTithing"
+                     checked={includeInTithing}
+                     onChange={(e) => setIncludeInTithing(e.target.checked)}
+                     className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                 />
+                 <label htmlFor="includeInTithing" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                     Incluir no cálculo do dízimo?
+                 </label>
+              </div>
+         )}
+
+         <div className="space-y-3 p-3 bg-primary-50 dark:bg-slate-800 rounded-md border border-primary-100 dark:border-slate-700">
+            <div className="flex items-center gap-2">
                 <input 
                     type="checkbox" 
-                    id="includeInTithing"
-                    checked={includeInTithing}
-                    onChange={(e) => setIncludeInTithing(e.target.checked)}
+                    id="isMovement"
+                    checked={isMovement}
+                    onChange={(e) => setIsMovement(e.target.checked)}
                     className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
                 />
-                <label htmlFor="includeInTithing" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                    Incluir no cálculo do dízimo?
+                <label htmlFor="isMovement" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                    Movimento - Mostrar saldo em outro banco?
                 </label>
-             </div>
-        )}
+            </div>
+            
+            {isMovement && (
+                <div className="pl-6 space-y-2">
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Banco de Destino</label>
+                    <select 
+                        value={movementBankId} 
+                        onChange={e => setMovementBankId(e.target.value)}
+                        required={isMovement}
+                        className="w-full p-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md text-sm outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                        <option value="">Selecione o banco de destino</option>
+                        {banks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <p className="text-[10px] text-primary-600 dark:text-primary-400 italic">
+                        As saídas nesta categoria aparecerão como entradas planejadas no banco selecionado.
+                    </p>
+                </div>
+            )}
+         </div>
 
         <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ícone</label>

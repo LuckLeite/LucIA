@@ -1,11 +1,12 @@
 
 import React from 'react';
-import type { Transaction, Category } from '../types';
+import type { Transaction, Category, Bank } from '../types';
 import { getIconComponent } from '../constants';
 
 interface TransactionListProps {
   transactions: Transaction[];
   categories: Category[];
+  banks: Bank[];
   onEdit: (transaction: Transaction) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -19,6 +20,7 @@ const parseDateAsUTC = (dateString: string) => new Date(dateString + 'T00:00:00Z
 export const TransactionListItem: React.FC<{ 
     transaction: Transaction; 
     category?: Category; 
+    bank?: Bank;
     onEdit: () => void; 
     onDelete: () => void;
     onDuplicate?: () => void;
@@ -27,7 +29,7 @@ export const TransactionListItem: React.FC<{
     onSelect?: (id: string) => void;
     isCalculatorOpen?: boolean;
     onValueClick?: (val: number) => void;
-}> = ({ transaction, category, onEdit, onDelete, onDuplicate, showCheckbox, isSelected, onSelect, isCalculatorOpen, onValueClick }) => {
+}> = ({ transaction, category, bank, onEdit, onDelete, onDuplicate, showCheckbox, isSelected, onSelect, isCalculatorOpen, onValueClick }) => {
   const Icon = category ? getIconComponent(category.iconName) : null;
   const isIncome = transaction.type === 'income';
 
@@ -64,6 +66,11 @@ export const TransactionListItem: React.FC<{
           </p>
           <div className="flex gap-2 items-center text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             <span className="whitespace-nowrap">{parseDateAsUTC(transaction.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</span>
+            {transaction.isVirtual && (
+                <span className="px-1.5 py-0.5 rounded-full font-bold text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 uppercase tracking-tighter">
+                    Automático
+                </span>
+            )}
             {category && (
                 <span 
                     className="truncate px-1.5 py-0.5 rounded-full font-bold text-[9px] sm:text-[10px] text-white shadow-sm" 
@@ -72,6 +79,16 @@ export const TransactionListItem: React.FC<{
                     }}
                 >
                     {category.name}
+                </span>
+            )}
+            {bank && (
+                <span 
+                    className="truncate px-1.5 py-0.5 rounded-full font-bold text-[9px] sm:text-[10px] text-white shadow-sm flex items-center gap-1" 
+                    style={{ 
+                        backgroundColor: bank.color
+                    }}
+                >
+                    <span className="opacity-70">🏦</span> {bank.name}
                 </span>
             )}
           </div>
@@ -86,25 +103,34 @@ export const TransactionListItem: React.FC<{
           {isIncome ? '+' : '-'} {transaction.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </span>
         <div className="flex items-center">
-            {onDuplicate && (
+            {onDuplicate && !transaction.isVirtual && (
                 <button onClick={onDuplicate} title="Duplicar" className="text-gray-400 hover:text-cyan-500 dark:hover:text-cyan-400 p-1 hidden lg:block">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                 </button>
             )}
-            <button onClick={onEdit} title="Editar" className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-            </button>
-            <button onClick={onDelete} title="Apagar" className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-            </button>
+            {!transaction.isVirtual ? (
+                <>
+                    <button onClick={onEdit} title="Editar" className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    </button>
+                    <button onClick={onDelete} title="Apagar" className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    </button>
+                </>
+            ) : (
+                <div className="p-1 text-gray-300 dark:text-slate-600" title="Transação automática (espelho)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+            )}
         </div>
       </div>
     </li>
   );
 };
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions, categories, onEdit, onDelete, onDuplicate, onViewAll, isCalculatorOpen, onValueClick }) => {
+const TransactionList: React.FC<TransactionListProps> = ({ transactions, categories, banks, onEdit, onDelete, onDuplicate, onViewAll, isCalculatorOpen, onValueClick }) => {
   const categoryMap = new Map(categories.map(c => [c.id, c]));
+  const bankMap = new Map(banks.map(b => [b.id, b]));
   if (transactions.length === 0) {
     return (
         <div className="bg-gray-50 dark:bg-slate-900 p-4 sm:p-6">
@@ -128,6 +154,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, categor
             key={tx.id} 
             transaction={tx} 
             category={categoryMap.get(tx.categoryId)} 
+            bank={bankMap.get(tx.bankId || '')}
             onEdit={() => onEdit(tx)} 
             onDelete={() => onDelete(tx.id)} 
             onDuplicate={() => onDuplicate(tx.id)} 
