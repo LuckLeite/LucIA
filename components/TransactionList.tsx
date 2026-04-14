@@ -66,9 +66,10 @@ export const TransactionListItem: React.FC<{
           </p>
           <div className="flex gap-2 items-center text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             <span className="whitespace-nowrap">{parseDateAsUTC(transaction.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</span>
-            {transaction.isVirtual && (
-                <span className="px-1.5 py-0.5 rounded-full font-bold text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 uppercase tracking-tighter">
-                    Automático
+            {transaction.linked_transaction_id && (
+                <span className="px-1.5 py-0.5 rounded-full font-bold text-[9px] sm:text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 uppercase tracking-tighter flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+                    Transferência
                 </span>
             )}
             {category && (
@@ -103,25 +104,17 @@ export const TransactionListItem: React.FC<{
           {isIncome ? '+' : '-'} {transaction.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </span>
         <div className="flex items-center">
-            {onDuplicate && !transaction.isVirtual && (
+            {onDuplicate && (
                 <button onClick={onDuplicate} title="Duplicar" className="text-gray-400 hover:text-cyan-500 dark:hover:text-cyan-400 p-1 hidden lg:block">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                 </button>
             )}
-            {!transaction.isVirtual ? (
-                <>
-                    <button onClick={onEdit} title="Editar" className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                    </button>
-                    <button onClick={onDelete} title="Apagar" className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    </button>
-                </>
-            ) : (
-                <div className="p-1 text-gray-300 dark:text-slate-600" title="Transação automática (espelho)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                </div>
-            )}
+            <button onClick={onEdit} title="Editar" className="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400 p-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+            </button>
+            <button onClick={onDelete} title="Apagar" className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 p-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>
         </div>
       </div>
     </li>

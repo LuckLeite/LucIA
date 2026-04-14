@@ -136,33 +136,6 @@ export const useFinanceData = () => {
     const movementCategoryExpense = useMemo(() => findCategoryByName('Movimento', 'expense'), [categories]);
     const movementCategoryIncome = useMemo(() => findCategoryByName('Movimento', 'income'), [categories]);
 
-    const virtualTransactions = useMemo<Transaction[]>(() => {
-        const virtuals: Transaction[] = [];
-        const movementCategories = categories.filter(c => c.is_movement && c.movement_bank_id);
-        
-        transactions.forEach(tx => {
-            const cat = movementCategories.find(c => c.id === tx.categoryId);
-            if (cat && tx.type === 'expense') {
-                virtuals.push({
-                    id: `virtual_mov_${tx.id}`,
-                    amount: tx.amount,
-                    type: 'income',
-                    categoryId: tx.categoryId,
-                    bankId: cat.movement_bank_id,
-                    date: tx.date,
-                    description: `Movimento: ${tx.description || cat.name}`,
-                    isVirtual: true
-                });
-            }
-        });
-        
-        return virtuals;
-    }, [transactions, categories]);
-
-    const allTransactions = useMemo(() => {
-        return [...transactions, ...virtualTransactions];
-    }, [transactions, virtualTransactions]);
-
     const getPersistentOverride = (key: string) => {
         return plannedTransactions.find(pt => pt.group_name === key);
     };
@@ -245,19 +218,92 @@ export const useFinanceData = () => {
     }, [transactions, settings.calculateTithing, tithingCategory, categories, plannedTransactions, primaryBankId]);
 
     const addTransaction = async (tx: Omit<Transaction, 'id'>) => {
-        const newTx = { ...tx, id: generateUUID() };
-        setTransactions(prev => [newTx, ...prev]);
-        await syncItem('transactions', newTx);
+        if (!supabase || !session) return;
+        
+        const cat = categories.find(c => c.id === tx.categoryId);
+        const isMovement = cat?.is_movement && cat.movement_bank_id;
+
+        const mainId = generateUUID();
+        const mainTx = { ...tx, id: mainId };
+        const toInsert = [];
+
+        if (isMovement) {
+            const counterId = generateUUID();
+            const counterTx: Transaction = {
+                id: counterId,
+                amount: tx.amount,
+                type: tx.type === 'income' ? 'expense' : 'income',
+                categoryId: tx.categoryId,
+                bankId: cat.movement_bank_id,
+                date: tx.date,
+                description: tx.description || `Movimento: ${cat.name}`,
+                linked_transaction_id: mainId
+            };
+            mainTx.linked_transaction_id = counterId;
+            
+            const { bankId: b1, ...cleanMain } = mainTx;
+            const { bankId: b2, ...cleanCounter } = counterTx;
+
+            toInsert.push(
+                { ...cleanMain, user_id: session.user.id, bank_id: b1 },
+                { ...cleanCounter, user_id: session.user.id, bank_id: b2 }
+            );
+            
+            setTransactions(prev => [mainTx, counterTx, ...prev]);
+        } else {
+            const { bankId, ...cleanTx } = mainTx;
+            toInsert.push({ ...cleanTx, user_id: session.user.id, bank_id: bankId });
+            setTransactions(prev => [mainTx, ...prev]);
+        }
+
+        const { error } = await supabase.from('transactions').insert(toInsert);
+        if (error) setError(`Erro ao salvar: ${error.message}`);
     };
 
     const updateTransaction = async (tx: Transaction) => {
-        setTransactions(prev => prev.map(t => t.id === tx.id ? tx : t));
-        await syncItem('transactions', tx);
+        if (!supabase || !session) return;
+
+        const cat = categories.find(c => c.id === tx.categoryId);
+        const isMovement = cat?.is_movement && cat.movement_bank_id;
+
+        const { bankId: bId, ...cleanTx } = tx;
+        const toUpsert = [{ ...cleanTx, user_id: session.user.id, bank_id: bId }];
+        const localUpdates = [tx];
+
+        if (isMovement && tx.linked_transaction_id) {
+            const counter = transactions.find(t => t.id === tx.linked_transaction_id);
+            if (counter) {
+                const updatedCounter: Transaction = {
+                    ...counter,
+                    amount: tx.amount,
+                    date: tx.date,
+                    description: tx.description,
+                    type: tx.type === 'income' ? 'expense' : 'income'
+                };
+                const { bankId: cbId, ...cleanCounter } = updatedCounter;
+                toUpsert.push({ ...cleanCounter, user_id: session.user.id, bank_id: cbId });
+                localUpdates.push(updatedCounter);
+            }
+        }
+
+        setTransactions(prev => prev.map(t => {
+            const up = localUpdates.find(lu => lu.id === t.id);
+            return up || t;
+        }));
+
+        const { error } = await supabase.from('transactions').upsert(toUpsert);
+        if (error) setError(`Erro ao atualizar: ${error.message}`);
     };
 
     const deleteTransaction = async (id: string) => {
-        setTransactions(prev => prev.filter(t => t.id !== id));
-        await syncItem('transactions', { id }, 'delete');
+        const tx = transactions.find(t => t.id === id);
+        const idsToDelete = [id];
+        if (tx?.linked_transaction_id) idsToDelete.push(tx.linked_transaction_id);
+
+        setTransactions(prev => prev.filter(t => !idsToDelete.includes(t.id)));
+        for (const delId of idsToDelete) {
+            await syncItem('transactions', { id: delId }, 'delete');
+        }
     };
 
     const addMultipleTransactions = async (txs: Omit<Transaction, 'id'>[]) => {
@@ -286,9 +332,9 @@ export const useFinanceData = () => {
 
     const getMonthlySummary = (date: Date, bankId: string = 'all') => {
         const prefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const filtered = allTransactions.filter(t => {
+        const filtered = transactions.filter(t => {
             const cat = categories.find(c => c.id === t.categoryId);
-            const isMovement = cat?.name.toLowerCase() === 'movimento';
+            const isMovement = cat?.is_movement;
             const matchesBank = bankId === 'all' || t.bankId === bankId;
             return t.date.startsWith(prefix) && !isMovement && matchesBank;
         });
@@ -588,11 +634,11 @@ export const useFinanceData = () => {
     };
 
     const totalBalance = useMemo(() => {
-        return allTransactions.reduce((sum, t) => t.type === 'income' ? sum + t.amount : sum - t.amount, 0);
-    }, [allTransactions]);
+        return transactions.reduce((sum, t) => t.type === 'income' ? sum + t.amount : sum - t.amount, 0);
+    }, [transactions]);
 
     return {
-        transactions: allTransactions, categories, banks, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
+        transactions, categories, banks, addTransaction, duplicateTransaction, addMultipleTransactions, updateTransaction, deleteTransaction, 
         getMonthlySummary, deleteMultipleTransactions, updateMultipleTransactionsCategory, getGeneratedMovementForMonth,
         plannedTransactions, generatedCardInvoices, generatedTithing, addPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, duplicatePlannedTransaction, markPlannedTransactionAsPaid, unmarkPlannedTransactionAsPaid,
         cardTransactions, cardRegistries, addCardTransaction, updateCardTransaction, deleteCardTransaction, addCardRegistry, updateCardRegistry, deleteCardRegistry,

@@ -19,7 +19,7 @@ export interface Transaction {
   bankId?: string;
   date: string; // ISO string format
   description: string;
-  isVirtual?: boolean;
+  linked_transaction_id?: string;
 }
 
 export interface PlannedTransaction {
