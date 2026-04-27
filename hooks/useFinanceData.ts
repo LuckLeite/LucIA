@@ -448,6 +448,7 @@ export const useFinanceData = () => {
             amount: pt.amount,
             type: pt.type,
             categoryId: pt.categoryId,
+            bankId: pt.bankId || primaryBankId,
             date: new Date().toISOString().split('T')[0],
             description: pt.description
         });

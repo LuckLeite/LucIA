@@ -41,7 +41,8 @@ const PlannedTransactionForm: React.FC<PlannedTransactionFormProps> = ({ onSubmi
       setAmount('');
       setType('expense');
       setCategoryId(categories.find(c => c.type === 'expense')?.id || '');
-      setBankId(defaultBankId || banks[0]?.id || '');
+      const primaryBank = banks.find(b => b.is_primary);
+      setBankId(defaultBankId || primaryBank?.id || banks[0]?.id || '');
       setDueDate(new Date().toISOString().split('T')[0]);
       setDescription('');
       setRecurrenceCount('');
