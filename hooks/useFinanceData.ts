@@ -32,6 +32,61 @@ export const useFinanceData = () => {
         return () => subscription.unsubscribe();
     }, []);
 
+    const mapToSupabase = (table: string, item: any) => {
+        const { isPersistentOverride, ...rest } = item;
+        const data: any = { ...rest, user_id: session?.user?.id };
+
+        // Mapeamento universal CamelCase -> snake_case
+        if (item.bankId) data.bank_id = item.bankId;
+        if (item.categoryId) data.category_id = item.categoryId;
+        if (item.dueDate) data.due_date = item.dueDate;
+        if (item.totalAmount) data.total_amount = item.totalAmount;
+        if (item.purchaseDate) data.purchase_date = item.purchaseDate;
+        if (item.currentBalance) data.current_balance = item.currentBalance;
+
+        // Remove os campos camelCase originais para evitar duplicidade ou colunas inexistentes
+        delete data.bankId;
+        delete data.categoryId;
+        delete data.dueDate;
+        delete data.totalAmount;
+        delete data.purchaseDate;
+        delete data.currentBalance;
+        delete data.isPersistentOverride;
+
+        // Limpezas específicas baseadas no que não existe em cada tabela
+        if (table === 'planned_transactions') {
+            delete data.current_balance; // Confirmado que não existe
+        }
+
+        if (table === 'transactions') {
+            delete data.current_balance;
+            delete data.isGenerated;
+        }
+
+        return data;
+    };
+
+    const mapFromSupabase = (item: any) => {
+        return {
+            ...item,
+            bankId: item.bank_id ?? item.bankId ?? item.bankid,
+            categoryId: item.category_id ?? item.categoryId ?? item.categoryid,
+            dueDate: item.due_date ?? item.dueDate ?? item.duedate,
+            totalAmount: item.total_amount ?? item.totalAmount ?? item.totalamount,
+            purchaseDate: item.purchase_date ?? item.purchaseDate ?? item.purchasedate,
+            currentBalance: item.current_balance ?? item.currentBalance ?? item.currentbalance,
+            includeInTithing: item.include_in_tithing ?? item.includeInTithing ?? item.includeintithing,
+            sort_order: item.sort_order ?? item.sortorder
+        };
+    };
+
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => setError(null), 10000);
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
+
     const syncItem = async (table: string, item: any, operation: 'upsert' | 'delete' = 'upsert') => {
         if (!supabase || !session) return;
         
@@ -42,18 +97,12 @@ export const useFinanceData = () => {
                 const { error } = await supabase.from(table).delete().eq('id', item.id);
                 if (error) throw error;
             } else {
-                const { isGenerated, isPersistentOverride, bankId, ...cleanItem } = item;
-                let dataToSync = { 
-                    ...cleanItem, 
-                    user_id: session.user.id,
-                    bank_id: bankId || item.bank_id // Mapeia camelCase para snake_case se necessário
-                };
-                
+                const dataToSync = mapToSupabase(table, item);
                 const { error } = await supabase.from(table).upsert(dataToSync);
                 if (error) throw error;
             }
         } catch (e: any) {
-            setError(`Falha ao salvar: ${e.message}`);
+            setError(`Falha ao sincronizar em ${table}: ${e.message}`);
         }
     };
 
@@ -86,25 +135,20 @@ export const useFinanceData = () => {
                         user_id: session.user.id,
                         sort_order: idx
                     }));
-                    const { data: insertedCats } = await supabase.from('categories').insert(seedCategories).select();
-                    if (insertedCats) setCategories(insertedCats);
+                    const dataToInsert = seedCategories.map(c => mapToSupabase('categories', c));
+                    const { data: insertedCats, error: catErr } = await supabase.from('categories').insert(dataToInsert).select();
+                    if (catErr) throw catErr;
+                    if (insertedCats) setCategories(insertedCats.map(mapFromSupabase));
                 } else {
-                    setCategories(cat.data.map((c: any) => ({
-                        ...c,
-                        includeInTithing: c.includeInTithing ?? c.includeintithing ?? (c.type === 'income'),
-                        sort_order: c.sort_order ?? c.sortorder,
-                        bankId: c.bank_id ?? c.bankid,
-                        is_movement: c.is_movement ?? c.is_movement,
-                        movement_bank_id: c.movement_bank_id ?? c.movement_bank_id
-                    })));
+                    setCategories(cat.data.map(mapFromSupabase));
                 }
             }
 
-            if (txs.data) setTransactions(txs.data.map((t: any) => ({ ...t, bankId: t.bank_id })));
-            if (pln.data) setPlannedTransactions(pln.data.map((p: any) => ({ ...p, bankId: p.bank_id })));
-            if (crd.data) setCardTransactions(crd.data.map((c: any) => ({ ...c, bankId: c.bank_id })));
+            if (txs.data) setTransactions(txs.data.map(mapFromSupabase));
+            if (pln.data) setPlannedTransactions(pln.data.map(mapFromSupabase));
+            if (crd.data) setCardTransactions(crd.data.map(mapFromSupabase));
             if (creg.data) setCardRegistries(creg.data || []);
-            if (inv.data) setInvestments(inv.data.map((i: any) => ({ ...i, bankId: i.bank_id })));
+            if (inv.data) setInvestments(inv.data.map(mapFromSupabase));
             if (bud.data) setBudgets(bud.data);
             
             if (set.data) {
@@ -241,23 +285,19 @@ export const useFinanceData = () => {
             };
             mainTx.linked_transaction_id = counterId;
             
-            const { bankId: b1, ...cleanMain } = mainTx;
-            const { bankId: b2, ...cleanCounter } = counterTx;
-
-            toInsert.push(
-                { ...cleanMain, user_id: session.user.id, bank_id: b1 },
-                { ...cleanCounter, user_id: session.user.id, bank_id: b2 }
-            );
-            
+            toInsert.push(mapToSupabase('transactions', mainTx), mapToSupabase('transactions', counterTx));
             setTransactions(prev => [mainTx, counterTx, ...prev]);
         } else {
-            const { bankId, ...cleanTx } = mainTx;
-            toInsert.push({ ...cleanTx, user_id: session.user.id, bank_id: bankId });
+            toInsert.push(mapToSupabase('transactions', mainTx));
             setTransactions(prev => [mainTx, ...prev]);
         }
 
-        const { error } = await supabase.from('transactions').insert(toInsert);
-        if (error) setError(`Erro ao salvar: ${error.message}`);
+        try {
+            const { error } = await supabase.from('transactions').insert(toInsert);
+            if (error) throw error;
+        } catch (e: any) {
+            setError(`Erro ao salvar transação: ${e.message}`);
+        }
     };
 
     const updateTransaction = async (tx: Transaction) => {
@@ -266,8 +306,7 @@ export const useFinanceData = () => {
         const cat = categories.find(c => c.id === tx.categoryId);
         const isMovement = cat?.is_movement && cat.movement_bank_id;
 
-        const { bankId: bId, ...cleanTx } = tx;
-        const toUpsert = [{ ...cleanTx, user_id: session.user.id, bank_id: bId }];
+        const toUpsert = [mapToSupabase('transactions', tx)];
         const localUpdates = [tx];
 
         if (isMovement && tx.linked_transaction_id) {
@@ -280,8 +319,7 @@ export const useFinanceData = () => {
                     description: tx.description,
                     type: tx.type === 'income' ? 'expense' : 'income'
                 };
-                const { bankId: cbId, ...cleanCounter } = updatedCounter;
-                toUpsert.push({ ...cleanCounter, user_id: session.user.id, bank_id: cbId });
+                toUpsert.push(mapToSupabase('transactions', updatedCounter));
                 localUpdates.push(updatedCounter);
             }
         }
@@ -291,8 +329,12 @@ export const useFinanceData = () => {
             return up || t;
         }));
 
-        const { error } = await supabase.from('transactions').upsert(toUpsert);
-        if (error) setError(`Erro ao atualizar: ${error.message}`);
+        try {
+            const { error } = await supabase.from('transactions').upsert(toUpsert);
+            if (error) throw error;
+        } catch (e: any) {
+            setError(`Erro ao atualizar transação: ${e.message}`);
+        }
     };
 
     const deleteTransaction = async (id: string) => {
@@ -359,8 +401,13 @@ export const useFinanceData = () => {
         }
         setPlannedTransactions(prev => [...pts, ...prev]);
         if (supabase && session) {
-            const dataToSync = pts.map(p => ({ ...p, user_id: session.user.id }));
-            await supabase.from('planned_transactions').insert(dataToSync);
+            try {
+                const dataToSync = pts.map(p => mapToSupabase('planned_transactions', p));
+                const { error } = await supabase.from('planned_transactions').insert(dataToSync);
+                if (error) throw error;
+            } catch (e: any) {
+                setError(`Erro ao salvar planejados: ${e.message}`);
+            }
         }
     };
 
@@ -405,7 +452,12 @@ export const useFinanceData = () => {
             }));
 
             if (supabase && session) {
-                await supabase.from('planned_transactions').upsert(updates.map(u => ({ ...u, user_id: session.user.id })));
+                try {
+                    const { error } = await supabase.from('planned_transactions').upsert(updates.map(u => mapToSupabase('planned_transactions', u)));
+                    if (error) throw error;
+                } catch (e: any) {
+                    setError(`Erro ao atualizar série de planejados: ${e.message}`);
+                }
             }
         }
 
@@ -505,7 +557,12 @@ export const useFinanceData = () => {
         const updates = newOrder.map((c, i) => ({ ...c, sort_order: i }));
         setCategories(updates);
         if (supabase && session) {
-            await supabase.from('categories').upsert(updates.map(u => ({ ...u, user_id: session.user.id })));
+            try {
+                const { error } = await supabase.from('categories').upsert(updates.map(u => mapToSupabase('categories', u)));
+                if (error) throw error;
+            } catch (e: any) {
+                setError(`Erro ao atualizar ordem das categorias: ${e.message}`);
+            }
         }
     };
 
